@@ -12,8 +12,8 @@ import requests
 _STOP = set("""
 the and for with from your into business professional company team teams senior
 junior manager director head lead specialist expert officer associate role position
-global regional executive project management opportunity years experience working
-strategic strategy strong skills work responsible responsibilities join company
+global regional executive management opportunity years experience working
+strong skills work responsible responsibilities join company
 a an of in at by to as is are it this that on a
 """.split())
 _SYNONYMS = {
