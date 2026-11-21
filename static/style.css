@@ -393,3 +393,14 @@ body{font-size:13px}
 @media(prefers-reduced-motion:reduce){
  .landing-clean .reveal-intro,.hero-word{animation:none!important;opacity:1!important;filter:none!important;transform:none!important}
 }
+
+/* Landing footer: restrained pricing and tagline, aligned on all devices. */
+.landing-clean .landing-footer-offer{display:inline-flex;align-items:baseline;justify-content:flex-end;gap:11px;flex-wrap:wrap}
+.landing-clean .landing-footer-price{color:#850d45;font-size:14px;font-weight:800;letter-spacing:-.035em;white-space:nowrap}
+.landing-clean .landing-footer-tagline{font-size:10px;font-weight:500;letter-spacing:-.01em;color:#777}
+@media(max-width:790px){
+ .landing-clean .landing-footer{align-items:flex-end;gap:14px}
+ .landing-clean .landing-footer-offer{flex-direction:column;align-items:flex-end;text-align:right;gap:4px}
+ .landing-clean .landing-footer-price{font-size:12px}
+ .landing-clean .landing-footer-tagline{font-size:9px}
+}
