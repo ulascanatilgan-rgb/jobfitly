@@ -278,7 +278,7 @@ def get_run(uid,date=None):
 
 def run_search(uid):
  p=profile_for(uid)
- if not p.get('has_cv') or len(p.get('questions',{}))<len(QUESTIONS) or not p.get('swipes') or not p.get('country') or not p.get('city'):
+ if not p.get('has_cv') or len(p.get('questions',{}))<15 or not p.get('swipes') or not p.get('country') or not p.get('city'):
   return None,'Complete CV, Work Style and Purpose first.',400
  # Reserve once per calendar day atomically, even for concurrent requests.
  try:
