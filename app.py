@@ -1,0 +1,442 @@
+import os, re, io, json, sqlite3, secrets, datetime, hmac, html, ipaddress, concurrent.futures
+from zoneinfo import ZoneInfo
+from urllib.parse import urlparse
+from pathlib import Path
+from functools import wraps
+import requests
+from flask import Flask, render_template, request, jsonify, session, send_file
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from pypdf import PdfReader
+from docx import Document
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+BASE = Path(__file__).parent
+DB = Path(os.getenv('DATABASE_PATH', str(BASE / 'jobfitly.sqlite3')))
+DB.parent.mkdir(parents=True, exist_ok=True)
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY') or ('local-development-only' if not os.getenv('RAILWAY_ENVIRONMENT') else None)
+if not app.secret_key: raise RuntimeError('SECRET_KEY must be set in Railway Variables')
+app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE','1' if os.getenv('RAILWAY_ENVIRONMENT') else '0')=='1')
+
+QUESTIONS = [
+ ('analytical','I enjoy analysing facts and patterns.'),('creative','I like inventing new ideas.'),
+ ('people','I enjoy meeting new people.'),('coordination','I like organising teams and projects.'),
+ ('desk','I am comfortable with desk-focused work.'),('autonomy','I prefer working independently.'),
+ ('leadership','I enjoy leading others.'),('structure','I prefer a clearly structured day.'),
+ ('ambiguity','I enjoy solving unfamiliar problems.'),('communication','I am confident presenting my ideas.'),
+ ('detail','I notice details others miss.'),('pace','I thrive in fast-moving workplaces.'),
+ ('collaboration','I enjoy teamwork.'),('strategy','I like planning for the long term.'),
+ ('operations','I like improving how organisations work.')
+]
+SWIPES = [
+ ('sector','Sector',['Open to all','Technology','Finance','Healthcare','Creative','Other']),
+ ('role_type','Role direction',['Operations & strategy','People & relationships','Analytical','Creative & product','Open to all']),
+ ('environment','Company type',['Startup','Established company','No preference']),
+ ('priority','Career priority',['Growth','Security','Balance']),
+ ('mode','Work setting',['Remote','Hybrid','On-site','No preference']),
+ ('seniority','Career level',['Specialist','Manager','Leadership','Flexible'])
+]
+COUNTRIES = {'belgium':'be','netherlands':'nl','france':'fr','germany':'de','united kingdom':'gb','ireland':'ie','united states':'us','canada':'ca','australia':'au','austria':'at','poland':'pl','spain':'es','italy':'it','switzerland':'ch'}
+MAX_AGE_DAYS = max(1,min(int(os.getenv('MAX_JOB_AGE_DAYS','14')),30))
+STOP = set('the a an and or in on to for of at from with by you your we are is be as have has this that will our their who into ability strong experience work working role team company years including can must should preferred required using plus good excellent'.split())
+
+def conn():
+ c=sqlite3.connect(str(DB), timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA busy_timeout=30000'); return c
+
+def init_db():
+ with conn() as c:
+  c.executescript('''
+   CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL);
+   CREATE TABLE IF NOT EXISTS profiles(user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, name TEXT DEFAULT '', country TEXT DEFAULT 'Belgium', city TEXT DEFAULT 'Brussels', language TEXT DEFAULT 'English', keywords TEXT DEFAULT '', cv_name TEXT DEFAULT '', cv_text TEXT DEFAULT '', questions TEXT DEFAULT '{}', swipes TEXT DEFAULT '{}', updated_at TEXT DEFAULT '');
+   CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, external_id TEXT, title TEXT, company TEXT, city TEXT, country TEXT, description TEXT, url TEXT, source TEXT, published TEXT, created_at TEXT, UNIQUE(user_id,external_id));
+   CREATE TABLE IF NOT EXISTS watchlist(user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE, added_at TEXT, PRIMARY KEY(user_id,job_id));
+   CREATE TABLE IF NOT EXISTS kits(user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE, motivation TEXT, cv TEXT, updated_at TEXT, PRIMARY KEY(user_id,job_id));
+   CREATE TABLE IF NOT EXISTS feed_state(user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, last_refresh_date TEXT, last_refresh_at TEXT);
+   CREATE TABLE IF NOT EXISTS daily_runs(id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, local_day TEXT NOT NULL, run_at TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'working', UNIQUE(user_id,local_day));
+   CREATE TABLE IF NOT EXISTS run_jobs(run_id INTEGER NOT NULL REFERENCES daily_runs(id) ON DELETE CASCADE, job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, position INTEGER NOT NULL, fit REAL NOT NULL, matched_terms TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(run_id,job_id));
+   CREATE INDEX IF NOT EXISTS ix_jobs_user ON jobs(user_id);
+   CREATE INDEX IF NOT EXISTS ix_run_jobs_run ON run_jobs(run_id);
+  ''')
+init_db()
+
+def today(): return datetime.datetime.now(ZoneInfo(os.getenv('APP_TIMEZONE','Europe/Brussels'))).date().isoformat()
+def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
+@app.before_request
+def csrf_protection():
+ if request.method in ('POST','PUT','PATCH','DELETE'):
+  if not session.get('_csrf') or not hmac.compare_digest(str(session['_csrf']),str(request.headers.get('X-CSRF-Token',''))):
+   return jsonify(error='Security token missing. Refresh the page and retry.'),403
+
+def csrf_token():
+ if not session.get('_csrf'):session['_csrf']=secrets.token_urlsafe(28)
+ return session['_csrf']
+
+def auth_required(fn):
+ @wraps(fn)
+ def wrap(*args,**kwargs):
+  if not session.get('uid'): return jsonify(error='Please sign in.'),401
+  return fn(*args,**kwargs)
+ return wrap
+
+def profile_for(uid):
+ with conn() as c:
+  row=c.execute('SELECT * FROM profiles WHERE user_id=?',(uid,)).fetchone()
+  if not row:
+   c.execute('INSERT INTO profiles(user_id,updated_at) VALUES (?,?)',(uid,now()))
+   row=c.execute('SELECT * FROM profiles WHERE user_id=?',(uid,)).fetchone()
+ d=dict(row); d['questions']=json.loads(d['questions'] or '{}'); d['swipes']=json.loads(d['swipes'] or '{}'); d['has_cv']=bool(d['cv_text']); d['cv_text_preview']=d['cv_text'][:1100]; d.pop('cv_text'); return d
+
+def tokenize(s): return set(x for x in re.findall(r'[a-zA-Z]{3,}',str(s).lower()) if x not in STOP)
+
+def score_job(job,p):
+ text=((job['title'] or '')+' '+(job['description'] or '')).lower()
+ terms=tokenize(p.get('keywords','')) | tokenize(p.get('cv_text_preview',''))
+ matches=sorted((tokenize(text)&terms),key=len,reverse=True)
+ # Score is an indicative profile relevance score; NOT hire probability.
+ score=4.7 + min(2.2,len(matches)*0.24)
+ city=(p.get('city') or '').lower().strip(); country=(p.get('country') or '').lower().strip()
+ if city and city in ((job['city'] or '').lower()): score+=1.15
+ if country and country in ((job['country'] or '').lower()):score+=0.5
+ pref=p.get('swipes',{}); q=p.get('questions',{})
+ for key,terms2 in [('people',['client','customer','stakeholder','relationship','communication']),('analytical',['data','analysis','analytical','financial']),('coordination',['project','manage','coordinate','operations']),('creative',['design','creative','brand','content']),('operations',['process','operations','delivery','logistics'])]:
+  v=q.get(key,5)
+  if isinstance(v,(int,float)) and v>=7 and any(t in text for t in terms2):score+=0.13
+ if pref.get('role_type')=='Operations & strategy' and any(t in text for t in ('operation','strateg','program')): score+=0.32
+ if pref.get('role_type')=='People & relationships' and any(t in text for t in ('client','sale','relationship')): score+=0.32
+ if pref.get('role_type')=='Creative & product' and any(t in text for t in ('product','technolog','software')): score+=0.32
+ return min(9.8,round(score,1)),matches[:5]
+
+def get_jobs(uid,watch_only=False):
+ p=profile_for(uid)
+ with conn() as c:
+  sql='''SELECT j.*, CASE WHEN w.job_id IS NULL THEN 0 ELSE 1 END AS saved FROM jobs j LEFT JOIN watchlist w ON w.job_id=j.id AND w.user_id=j.user_id WHERE j.user_id=?'''
+  if watch_only:sql+=' AND w.job_id IS NOT NULL'
+  rows=[dict(r) for r in c.execute(sql,(uid,)).fetchall()]
+ for row in rows:row['score'],row['matched_terms']=score_job(row,p)
+ rows.sort(key=lambda x:(x['score'],x['published'] or ''),reverse=True)
+ return rows
+
+def _parsed_date(value):
+ if not value:return None
+ try:
+  if isinstance(value,(int,float)) or str(value).isdigit():return datetime.datetime.fromtimestamp(int(value),datetime.timezone.utc)
+  parsed=datetime.datetime.fromisoformat(str(value).replace('Z','+00:00'))
+  return parsed.replace(tzinfo=datetime.timezone.utc) if parsed.tzinfo is None else parsed.astimezone(datetime.timezone.utc)
+ except (ValueError,OverflowError,TypeError):return None
+
+def _recent(date):
+ v=_parsed_date(date)
+ return bool(v and datetime.timedelta(hours=-1)<=datetime.datetime.now(datetime.timezone.utc)-v<=datetime.timedelta(days=MAX_AGE_DAYS))
+
+def _valid_public_link(link):
+ try:
+  q=urlparse(link)
+  if q.scheme!='https' or not q.hostname or q.username or q.password:return False
+  host=q.hostname.lower()
+  if host=='localhost' or host.endswith('.local'):return False
+  try:
+   ip=ipaddress.ip_address(host)
+   if not ip.is_global:return False
+  except ValueError:pass
+  return True
+ except Exception:return False
+
+def _check_live(job):
+ # Best-effort verification. A 200 response does not guarantee an employer has not closed a role.
+ url=job.get('url','')
+ if not _valid_public_link(url) or not _recent(job.get('published')):return False
+ try:
+  r=requests.get(url,timeout=7,headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
+  # Avoid arbitrary redirects to internal hosts; follow only public HTTPS destinations.
+  for _ in range(4):
+   if r.status_code not in (301,302,303,307,308):break
+   nxt=requests.compat.urljoin(r.url,r.headers.get('Location',''))
+   r.close()
+   if not _valid_public_link(nxt):return False
+   r=requests.get(nxt,timeout=7,headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
+  good=r.status_code==200
+  r.close()
+  return good
+ except requests.RequestException:return False
+
+def _adzuna(p):
+ appid=os.getenv('ADZUNA_APP_ID','').strip();key=os.getenv('ADZUNA_APP_KEY','').strip()
+ if not (appid and key):return []
+ country=str(p.get('country','Belgium')).lower().strip();code=COUNTRIES.get(country)
+ if not code:return []
+ terms=str(p.get('keywords','')).strip() or str(p.get('swipes',{}).get('role_type','')).replace(' & ',' ').strip()
+ if terms.lower() in ('open to all','flexible',''):terms='manager'
+ city=str(p.get('city','')).strip()
+ jobs=[]
+ for query in [terms[:85],('manager' if 'manager' not in terms.lower() else 'operations')]:
+  r=requests.get(f'https://api.adzuna.com/v1/api/jobs/{code}/search/1',params={'app_id':appid,'app_key':key,'results_per_page':50,'sort_by':'date','max_days_old':MAX_AGE_DAYS,'what':query,'where':city,'content-type':'application/json'},timeout=16)
+  r.raise_for_status()
+  for i in r.json().get('results',[]):
+   if not i.get('id'):continue
+   loc=(i.get('location') or {}).get('display_name','')
+   jobs.append({'external_id':f"adzuna:{i['id']}",'title':i.get('title',''),'company':(i.get('company') or {}).get('display_name',''),'city':loc,'country':p.get('country',''),'description':i.get('description',''),'url':i.get('redirect_url','').replace('http://','https://',1) if str(i.get('redirect_url','')).startswith('http://www.adzuna.') else i.get('redirect_url',''),'published':i.get('created',''),'source':'Adzuna'})
+ return jobs
+
+def _arbeitnow(p):
+ country=str(p.get('country','')).lower().strip()
+ if country not in ('germany','belgium','netherlands','austria','france','poland','united kingdom','ireland','spain','italy','switzerland'):return []
+ r=requests.get('https://www.arbeitnow.com/api/job-board-api',timeout=16)
+ r.raise_for_status()
+ rows=r.json().get('data',[])
+ matched=[]
+ for i in rows:
+  location=i.get('location','') or ''
+  city=(p.get('city') or '').strip().lower()
+  if city and city not in location.lower():continue
+  # Arbeitnow is not always country-tagged, so avoid returning unrelated cities as local matches.
+  if not city and country!='germany':continue
+  matched.append({'external_id':'arbeitnow:'+str(i.get('slug') or i.get('url')),'title':i.get('title',''),'company':i.get('company_name',''),'city':location,'country':p.get('country',''),'description':re.sub('<[^>]+>',' ',i.get('description',''))[:12000],'url':i.get('url',''),'published':i.get('created_at') or i.get('date'),'source':'Arbeitnow'})
+ return matched
+
+def fetch_candidates(profile):
+ sources=[];errors=[]
+ for source in (_adzuna,_arbeitnow):
+  try:sources.extend(source(profile))
+  except requests.RequestException as e:errors.append(f'{source.__name__}: {type(e).__name__}')
+ dedup={}
+ for j in sources:
+  if not j.get('title') or not j.get('company') or not _recent(j.get('published')) or not _valid_public_link(j.get('url','')):continue
+  key=(re.sub(r'\W+','',j['title'].lower()),re.sub(r'\W+','',j['company'].lower()),str(j['city']).lower()[:35])
+  if key not in dedup or j.get('source')=='Adzuna':dedup[key]=j
+ return list(dedup.values()),errors
+
+def get_run(uid,date=None):
+ date=date or today()
+ with conn() as c:
+  run=c.execute("SELECT * FROM daily_runs WHERE user_id=? AND local_day=? AND state='complete'",(uid,date)).fetchone()
+  if not run:return None,[]
+  rows=c.execute("""SELECT j.*,r.fit score,r.matched_terms,r.position, CASE WHEN w.job_id IS NULL THEN 0 ELSE 1 END saved FROM run_jobs r JOIN jobs j ON j.id=r.job_id LEFT JOIN watchlist w ON w.job_id=j.id AND w.user_id=j.user_id WHERE r.run_id=? ORDER BY r.position""",(run['id'],)).fetchall()
+  jobs=[dict(j) for j in rows]
+  for j in jobs:j['matched_terms']=json.loads(j['matched_terms'])
+  return dict(run),jobs
+
+def run_search(uid):
+ p=profile_for(uid)
+ if not p.get('has_cv') or len(p.get('questions',{}))<len(QUESTIONS) or not p.get('swipes') or not p.get('country') or not p.get('city'):
+  return None,'Complete CV, Skills and Search first.',400
+ # Reserve once per calendar day atomically, even for concurrent requests.
+ try:
+  with conn() as c:
+   c.execute('INSERT INTO daily_runs(user_id,local_day,run_at,state) VALUES(?,?,?,?)',(uid,today(),now(),'working'))
+ except sqlite3.IntegrityError:return None,'Today’s Run was already used.',409
+ try:
+  raw,errors=fetch_candidates(p)
+  ranked=[]
+  for j in raw:
+   score,matches=score_job(j,p)
+   ranked.append((score,j,matches))
+  ranked.sort(key=lambda a:a[0],reverse=True)
+  checked=[]
+  # Do not fill with fake or expired listings; freshness remains best effort, not a guarantee.
+  with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+   shortlist=ranked[:45]
+   verified=list(pool.map(lambda x:_check_live(x[1]),shortlist))
+  for (score,j,matches),live in zip(shortlist,verified):
+   if live:checked.append((score,j,matches))
+   if len(checked)==5:break
+  if not checked:
+   with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=?',(uid,today()))
+   return None,'No verified fresh listings found. Adjust Search or configure Adzuna, then retry.',422
+  with conn() as c:
+   run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
+   for k,(score,j,matches) in enumerate(checked):
+    c.execute("""INSERT INTO jobs(user_id,external_id,title,company,city,country,description,url,source,published,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,external_id) DO UPDATE SET description=excluded.description,url=excluded.url,published=excluded.published""",(uid,j['external_id'],j['title'][:240],j['company'][:200],j['city'][:230],j['country'][:100],j['description'][:14000],j['url'][:1400],j['source'],str(j['published']),now()))
+    job=c.execute('SELECT id FROM jobs WHERE user_id=? AND external_id=?',(uid,j['external_id'])).fetchone()
+    c.execute('INSERT INTO run_jobs(run_id,job_id,position,fit,matched_terms) VALUES(?,?,?,?,?)',(run['id'],job['id'],k+1,score,json.dumps(matches)))
+   c.execute("UPDATE daily_runs SET state='complete' WHERE id=?",(run['id'],))
+  return len(checked),None,200
+ except Exception as e:
+  with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state=?',(uid,today(),'working'))
+  app.logger.exception('Job search failed: %s',type(e).__name__)
+  return None,'The job sources are temporarily unavailable. Retry later.',502
+
+@app.get('/')
+def index():return render_template('index.html')
+@app.get('/health')
+def health():return jsonify(status='ok')
+@app.get('/api/config')
+def config():return jsonify(questions=[{'id':x,'text':y} for x,y in QUESTIONS],swipes=[{'id':x,'label':y,'choices':z} for x,y,z in SWIPES],live_jobs=bool(os.getenv('ADZUNA_APP_ID') and os.getenv('ADZUNA_APP_KEY')),ai=bool(os.getenv('OPENAI_API_KEY')),csrf=csrf_token())
+@app.post('/api/register')
+def register():
+ d=request.get_json(silent=True) or {}; email=str(d.get('email','')).strip().lower(); password=str(d.get('password',''))
+ if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email) or len(password)<8:return jsonify(error='Use a valid email and a password of at least 8 characters.'),400
+ try:
+  with conn() as c:
+   cur=c.execute('INSERT INTO users(email,password_hash,created_at) VALUES(?,?,?)',(email,generate_password_hash(password),now())); uid=cur.lastrowid
+   c.execute('INSERT INTO profiles(user_id,updated_at) VALUES(?,?)',(uid,now()))
+  session.clear();session['uid']=uid;return jsonify(ok=True,email=email,csrf=csrf_token())
+ except sqlite3.IntegrityError:return jsonify(error='This email is already registered.'),409
+@app.post('/api/login')
+def login():
+ d=request.get_json(silent=True) or {};email=str(d.get('email','')).strip().lower()
+ with conn() as c:r=c.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
+ if not r or not check_password_hash(r['password_hash'],str(d.get('password',''))):return jsonify(error='Incorrect email or password.'),401
+ session.clear();session['uid']=r['id'];return jsonify(ok=True,email=email,csrf=csrf_token())
+@app.post('/api/logout')
+def logout():session.clear();return jsonify(ok=True,csrf=csrf_token())
+@app.get('/api/me')
+@auth_required
+def me():
+ with conn() as c:u=c.execute('SELECT email FROM users WHERE id=?',(session['uid'],)).fetchone()
+ return jsonify(email=u['email'],profile=profile_for(session['uid']))
+@app.post('/api/profile')
+@auth_required
+def update_profile():
+ d=request.get_json(silent=True) or {};uid=session['uid']; allowed={'name','country','city','language','keywords','questions','swipes'}
+ values={k:v for k,v in d.items() if k in allowed}
+ for k in ['name','country','city','language','keywords']:
+  if k in values:values[k]=str(values[k])[:500]
+ for k in ['questions','swipes']:
+  if k in values:
+   if not isinstance(values[k],dict):return jsonify(error=f'Invalid {k}.'),400
+   if k=='questions': values[k]={key:max(0,min(10,int(value))) for key,value in values[k].items() if key in {x[0] for x in QUESTIONS} and isinstance(value,(int,float))}
+   if k=='swipes':values[k]={key:str(value)[:120] for key,value in values[k].items() if key in {x[0] for x in SWIPES}}
+   values[k]=json.dumps(values[k])
+ if values:
+  values['updated_at']=now(); cols=', '.join(k+'=?' for k in values)
+  with conn() as c:c.execute(f'UPDATE profiles SET {cols} WHERE user_id=?',list(values.values())+[uid])
+ return jsonify(profile=profile_for(uid))
+@app.post('/api/cv')
+@auth_required
+def upload_cv():
+ f=request.files.get('file')
+ if not f or not f.filename:return jsonify(error='Select your CV file.'),400
+ suffix=Path(secure_filename(f.filename)).suffix.lower()
+ if suffix not in {'.pdf','.docx','.txt'}:return jsonify(error='Upload a PDF, DOCX or TXT file.'),400
+ data=f.read(); text=''
+ try:
+  if suffix=='.pdf':text='\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(data)).pages[:12])
+  elif suffix=='.docx': text='\n'.join(p.text for p in Document(io.BytesIO(data)).paragraphs)
+  else:text=data.decode('utf-8',errors='replace')
+ except Exception:return jsonify(error='Unable to read this file. Try an editable PDF, DOCX or TXT.'),400
+ text=text.strip()[:24000]
+ if len(text)<50:return jsonify(error='Could not extract readable text from the CV. Try DOCX or a text-based PDF.'),400
+ with conn() as c:c.execute('UPDATE profiles SET cv_name=?,cv_text=?,updated_at=? WHERE user_id=?',(secure_filename(f.filename),text,now(),session['uid']))
+ return jsonify(ok=True,profile=profile_for(session['uid']))
+@app.get('/api/jobs')
+@auth_required
+def jobs():
+ run,items=get_run(session['uid'])
+ return jsonify(jobs=items,has_run=bool(run),date=today(),count=len(items))
+
+@app.post('/api/jobs/run')
+@auth_required
+def run_jobs():
+ count,error,status=run_search(session['uid'])
+ if error:return jsonify(error=error),status
+ return jsonify(ok=True,count=count)
+
+@app.get('/api/history')
+@auth_required
+def history():
+ uid=session['uid']
+ with conn() as c:dates=[r['local_day'] for r in c.execute("SELECT local_day FROM daily_runs WHERE user_id=? AND state='complete' ORDER BY local_day DESC LIMIT 90",(uid,))]
+ return jsonify(runs=[{'date':date,'jobs':get_run(uid,date)[1]} for date in dates])
+
+@app.get('/api/watchlist')
+@auth_required
+def watchlist():return jsonify(jobs=get_jobs(session['uid'],True))
+@app.post('/api/watchlist/<int:job_id>')
+@auth_required
+def save_job(job_id):
+ uid=session['uid']
+ with conn() as c:
+  r=c.execute('SELECT id FROM jobs WHERE id=? AND user_id=?',(job_id,uid)).fetchone()
+  if not r:return jsonify(error='Job not found.'),404
+  c.execute('INSERT OR IGNORE INTO watchlist(user_id,job_id,added_at) VALUES(?,?,?)',(uid,job_id,now()))
+ return jsonify(ok=True)
+@app.delete('/api/watchlist/<int:job_id>')
+@auth_required
+def unsave(job_id):
+ with conn() as c:c.execute('DELETE FROM watchlist WHERE user_id=? AND job_id=?',(session['uid'],job_id))
+ return jsonify(ok=True)
+
+def build_fallback(p,j):
+ raw=p.get('cv_text','');lines=[l.strip() for l in raw.splitlines() if l.strip()]
+ terms=tokenize(j['title']+' '+j['description'])
+ evidence=[l for l in lines if 12<len(l)<330 and tokenize(l)&terms]
+ evidence += [l for l in lines if 12<len(l)<330 and l not in evidence]
+ name=p.get('name') or (lines[0] if lines else 'Candidate')
+ requirements=[x.strip() for x in re.split(r'[.\n]',j.get('description','')) if 20<len(x.strip())<170]
+ points=[]
+ for i in range(7):
+  if i<len(evidence): points.append(f'{i+1}. {evidence[i]}')
+  elif i<len(requirements):points.append(f'{i+1}. Requirement to discuss: {requirements[i]} — evidence not yet provided in the CV.')
+  else:points.append(f'{i+1}. Further evidence for this role can be added after reviewing the original CV.')
+ motivation='MOTIVATIONS — '+j['title']+' | '+j['company']+'\n\n'+'\n'.join(points)
+ cv=f'{name}\nTARGET ROLE: {j["title"]}\n\nRELEVANT VERIFIED EXPERIENCE\n'+'\n'.join('• '+x for x in evidence[:5])+'\n\nORIGINAL CV — RETAINED FOR VERIFICATION\n'+raw
+ return motivation,cv
+
+def generate_ai(p,j):
+ key=os.getenv('OPENAI_API_KEY','')
+ if not key:return build_fallback(p,j)
+ inp={ 'candidate_name':p['name'],'cv_original':p['cv_text'][:19000],'preferences':{'city':p['city'],'country':p['country'],'keywords':p['keywords'],'questions':p['questions'],'swipes':p['swipes']},'role':{'title':j['title'],'company':j['company'],'description':j['description'][:9500]}}
+ sys='''You write truthful job applications. Return ONLY valid JSON with two string keys: motivation and cv. motivation MUST contain EXACTLY 7 short numbered points, each tied explicitly to a requirement in the job ad AND supported with evidence from the uploaded original CV. When evidence is missing, honestly state the gap rather than inventing skills. No intro or outro; keep to about 140-210 words total. cv must be a well-structured, readable updated CV in plain text, preserving real employers, dates, education, certificates, metrics and employment facts EXACTLY as provided; emphasize relevant strengths by reordering or rephrasing but NEVER invent, assume, inflate, add experience, credentials, or achievements. If CV lacks evidence for a requirement, omit it. Never claim the user is likely to be hired. No markdown code fences. The result is a DRAFT requiring user review.'''
+ endpoint=os.getenv('OPENAI_BASE_URL','https://api.openai.com/v1').rstrip('/')+'/chat/completions'
+ res=requests.post(endpoint,headers={'Authorization':'Bearer '+key,'Content-Type':'application/json'},json={'model':os.getenv('OPENAI_MODEL','gpt-4.1-mini'),'messages':[{'role':'system','content':sys},{'role':'user','content':json.dumps(inp)}],'response_format':{'type':'json_object'},'temperature':0.2,'max_tokens':3300},timeout=75)
+ res.raise_for_status(); payload=json.loads(res.json()['choices'][0]['message']['content'])
+ if not all(isinstance(payload.get(k),str) and len(payload[k])>50 for k in ('cv','motivation')):raise ValueError('Invalid generation response')
+ return payload['motivation'],payload['cv']
+@app.post('/api/kit/<int:job_id>')
+@auth_required
+def generate_kit(job_id):
+ uid=session['uid']
+ with conn() as c:
+  j=c.execute('SELECT j.* FROM jobs j JOIN watchlist w ON j.id=w.job_id AND w.user_id=? WHERE j.id=? AND j.user_id=?',(uid,job_id,uid)).fetchone()
+  p=c.execute('SELECT * FROM profiles WHERE user_id=?',(uid,)).fetchone()
+ if not j:return jsonify(error='Save the job to Watchlist first.'),404
+ if not p or not p['cv_text']:return jsonify(error='Upload your CV first.'),400
+ p=dict(p);p['questions']=json.loads(p['questions']);p['swipes']=json.loads(p['swipes'])
+ try:motivation,cv=generate_ai(p,dict(j))
+ except Exception:
+  # Do not mask an unavailable AI service as AI-generated output.
+  return jsonify(error='AI service unavailable. Check the OpenAI key, model and balance, then retry.'),502
+ with conn() as c:c.execute('INSERT INTO kits(user_id,job_id,motivation,cv,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id,job_id) DO UPDATE SET motivation=excluded.motivation,cv=excluded.cv,updated_at=excluded.updated_at',(uid,job_id,motivation,cv,now()))
+ return jsonify(motivation=motivation,cv=cv,engine='AI' if os.getenv('OPENAI_API_KEY') else 'Basic draft (no AI key)',notice='Review all claims and formatting before applying.')
+@app.get('/api/kit/<int:job_id>')
+@auth_required
+def get_kit(job_id):
+ with conn() as c:r=c.execute('SELECT motivation,cv FROM kits WHERE user_id=? AND job_id=?',(session['uid'],job_id)).fetchone()
+ if not r:return jsonify(error='No application kit yet.'),404
+ return jsonify(**dict(r))
+@app.get('/api/kit/<int:job_id>/download/<kind>')
+@auth_required
+def download_kit(job_id,kind):
+ if kind not in ('cv','motivation'):return jsonify(error='Unsupported file.'),400
+ with conn() as c:r=c.execute('SELECT cv,motivation FROM kits WHERE user_id=? AND job_id=?',(session['uid'],job_id)).fetchone()
+ if not r:return jsonify(error='Generate this document first.'),404
+ buf=io.BytesIO()
+ font='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+ if Path(font).exists() and 'JobFitlyBody' not in pdfmetrics.getRegisteredFontNames():pdfmetrics.registerFont(TTFont('JobFitlyBody',font))
+ ff='JobFitlyBody' if 'JobFitlyBody' in pdfmetrics.getRegisteredFontNames() else 'Helvetica'
+ doc=SimpleDocTemplate(buf,pagesize=(595.27,841.89),topMargin=49,bottomMargin=49,leftMargin=48,rightMargin=48,title='JobFitly '+kind)
+ normal=ParagraphStyle('normalJ',fontName=ff,fontSize=9.3,leading=14.7,textColor=colors.HexColor('#181818'),spaceAfter=7)
+ heading=ParagraphStyle('headingJ',parent=normal,fontSize=17,leading=22,spaceAfter=16)
+ bullet=ParagraphStyle('bulletJ',parent=normal,leftIndent=11,firstLineIndent=-7)
+ story=[]
+ for n,line in enumerate((r[kind] or '').splitlines()):
+  txt=line.strip()
+  if not txt:story.append(Spacer(1,6));continue
+  style=heading if n==0 else bullet if txt.startswith(('• ','- ')) or re.match(r'^\d+\.',txt) else normal
+  story.append(Paragraph(html.escape(txt),style))
+ doc.build(story);buf.seek(0)
+ return send_file(buf,as_attachment=True,download_name=f'JobFitly_{kind}_{job_id}.pdf',mimetype='application/pdf')
+
+@app.post('/api/account/delete')
+@auth_required
+def delete_account():
+ uid=session['uid']
+ with conn() as c:c.execute('DELETE FROM users WHERE id=?',(uid,))
+ session.clear();return jsonify(ok=True,csrf=csrf_token())
+
+if __name__=='__main__':app.run(host='0.0.0.0',port=int(os.getenv('PORT','8080')),debug=os.getenv('FLASK_DEBUG')=='1')
