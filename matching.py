@@ -28,7 +28,7 @@ _SYNONYMS = {
     "relations": "relationship",
 }
 _SPECIALTY = (
-    (r"\b(?:hr|human resources|people and culture|talent acquisition|recruitment|recruiting)\b",
+    (r"\b(?:hr|human resources|head of people|chief people officer|people director|people and culture|talent acquisition|recruitment|recruiting)\b",
      r"\b(?:hr manager|hr director|head of hr|human resources manager|human resources director|people director|people operations manager|talent acquisition manager|talent acquisition director|recruitment manager|recruiting manager|hr business partner|human resources business partner)\b"),
     (r"\b(?:physician|doctor|registered nurse|pharmacist|surgeon|medical director)\b",
      r"\b(?:physician|doctor of medicine|medical doctor|registered nurse|nursing degree|licensed pharmacist|surgeon)\b"),
@@ -42,13 +42,13 @@ _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s()./-]{8,}\d(?!\w)")
 
 
 def _tokens(text):
-    words = re.findall(r"[a-zA-Z]{3,}", str(text or "").lower())
+    words = re.findall(r"[a-zA-Z]{2,}", str(text or "").lower())
     return {_SYNONYMS.get(w, w) for w in words if w not in _STOP}
 
 
 def redact_cv(text):
     """Best-effort minimization of contact details sent to OpenAI for matching."""
-    return _PHONE.sub("[phone removed]", _EMAIL.sub("[email removed]", str(text or ""))[:10500]
+    return _PHONE.sub("[phone removed]", _EMAIL.sub("[email removed]", str(text or "")))[:10500]
 
 
 def specialty_fit(job_title, cv_text):
