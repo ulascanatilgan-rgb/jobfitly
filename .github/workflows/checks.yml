@@ -17,6 +17,6 @@ jobs:
         with:
           node-version: '20'
       - run: pip install -r requirements.txt
-      - run: python -m py_compile app.py job_search.py matching.py
-      - run: node --check static/app.js
+      - run: python -m py_compile app.py job_search.py matching.py pdf_documents.py
+      - run: node --check static/app.js && node --check static/flow.js
       - run: PYTHONPATH=. pytest -q
