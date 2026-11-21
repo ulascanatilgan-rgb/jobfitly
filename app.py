@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
 from pathlib import Path
 from functools import wraps
+from contextlib import contextmanager
 import requests
 from flask import Flask, render_template, request, jsonify, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -45,8 +46,20 @@ COUNTRIES = {'belgium':'be','netherlands':'nl','france':'fr','germany':'de','uni
 MAX_AGE_DAYS = max(1,min(int(os.getenv('MAX_JOB_AGE_DAYS','14')),30))
 STOP = set('the a an and or in on to for of at from with by you your we are is be as have has this that will our their who into ability strong experience work working role team company years including can must should preferred required using plus good excellent'.split())
 
+@contextmanager
 def conn():
- c=sqlite3.connect(str(DB), timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA busy_timeout=30000'); return c
+ c=sqlite3.connect(str(DB), timeout=30)
+ c.row_factory=sqlite3.Row
+ c.execute('PRAGMA foreign_keys=ON')
+ c.execute('PRAGMA busy_timeout=30000')
+ try:
+  yield c
+  c.commit()
+ except Exception:
+  c.rollback()
+  raise
+ finally:
+  c.close()
 
 def init_db():
  with conn() as c:
@@ -179,7 +192,7 @@ def _adzuna(p):
   for i in r.json().get('results',[]):
    if not i.get('id'):continue
    loc=(i.get('location') or {}).get('display_name','')
-   jobs.append({'external_id':f"adzuna:{i['id']}",'title':i.get('title',''),'company':(i.get('company') or {}).get('display_name',''),'city':loc,'country':p.get('country',''),'description':i.get('description',''),'url':i.get('redirect_url','').replace('http://','https://',1) if str(i.get('redirect_url','')).startswith('http://www.adzuna.') else i.get('redirect_url',''),'published':i.get('created',''),'source':'Adzuna'})
+   jobs.append({'external_id':f"adzuna:{i['id']}",'title':i.get('title',''),'company':(i.get('company') or {}).get('display_name',''),'city':loc,'country':p.get('country',''),'description':i.get('description',''),'url':i.get('redirect_url','').replace('http://','https://',1) if str(i.get('redirect_url','')).startswith(('http://www.adzuna.','http://adzuna.')) else i.get('redirect_url',''),'published':i.get('created',''),'source':'Adzuna'})
  return jobs
 
 def _arbeitnow(p):
