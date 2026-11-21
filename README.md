@@ -40,10 +40,9 @@ Open `http://localhost:8080`. `/health` returns `{ "status": "ok" }`.
 | `DATABASE_PATH` | `/data/jobfitly.sqlite3` |
 | `COOKIE_SECURE` | `1` (HTTPS only) |
 | `APP_TIMEZONE` | `Europe/Brussels` |
-| `ADZUNA_APP_ID` | Adzuna developer account ID (recommended for broad country/city search) |
-| `ADZUNA_APP_KEY` | Adzuna developer API key |
-| `OPENAI_API_KEY` | Optional. Enables AI draft generation; if unset, conservative basic drafts are generated. |
-| `OPENAI_MODEL` | `gpt-4.1-mini` (or another supported Chat Completions JSON-mode model) |
+| `OPENAI_API_KEY` | Required for Run and AI application drafts; paid OpenAI API account needed. |
+| `OPENAI_MODEL` | `gpt-4.1-mini` for CV and motivations (Chat Completions). |
+| `OPENAI_SEARCH_MODEL` | `gpt-4.1-mini` for Responses API web_search; optional override. |
 | `MAX_JOB_AGE_DAYS` | `14` (1–30; job recency filter) |
 
 4. Railway detects Python dependencies with **Railpack**. `railway.json` includes a Gunicorn start command and health check.
@@ -51,10 +50,11 @@ Open `http://localhost:8080`. `/health` returns `{ "status": "ok" }`.
 
 ### Job sources
 
-- **Adzuna REST API:** authorized published job results, requires credentials. Search by user-selected country/city and role keywords, newest first.
-- **Arbeitnow public jobs API:** limited additional European coverage, no API key; location checks and recency filtering apply.
-- Sources may return too few available, recently published, verifiably reachable roles; **JobFitly shows fewer than five rather than inventing jobs**. A failed search does not use the daily entitlement; retry after changing settings.
-- **No LinkedIn or Indeed scraping.** Source links are publisher links. Verify provider terms, display rights and any commercial licensing before public launch.
+- **OpenAI Responses API web_search:** searches the public web for relevant vacancies when Run is clicked. No Adzuna key needed.
+- Candidate CV excerpt (with simple contact redaction), 15 skill ratings and search preferences shape the search. Published dates must be recent; the exact listing URL must appear in web-search sources and return HTTP 200. This is best-effort, **not a guarantee the vacancy is still open**.
+- Search prioritizes employer-hosted career pages. No LinkedIn/Indeed scraping. Verify site and indexing terms before public launch.
+- **JobFitly shows fewer than five rather than inventing jobs**. A run with no verified matches is not consumed.
+- OpenAI web search charges per tool call and model tokens. The total depends on how many searches the model chooses to make: set an API budget and monitor usage.
 
 ### Important limitations before launch
 
@@ -70,6 +70,6 @@ node --check static/app.js
 pytest -q
 ```
 
-Stack: Flask, Gunicorn, SQLite, ReportLab, pypdf, python-docx, optional OpenAI, Adzuna & Arbeitnow.
+Stack: Flask, Gunicorn, SQLite, ReportLab, pypdf, python-docx, optional OpenAI web_search.
 
 Brand: white `#FFFFFF`, near-black `#131313`, burgundy `#850D45`, Manrope typeface, approved JobFitly. wordmark.
