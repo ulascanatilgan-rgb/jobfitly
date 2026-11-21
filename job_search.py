@@ -104,6 +104,7 @@ def search_jobs(profile, max_age_days=14):
             "model": model,
             "tools": [{"type": "web_search", "search_context_size": "medium"}],
             "tool_choice": "required",
+            "max_tool_calls": 3,
             "include": ["web_search_call.action.sources"],
             "store": False,
             "input": [
