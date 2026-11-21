@@ -5,10 +5,10 @@
 ## Product
 
 1. **CV** — Upload a text-based PDF, DOCX or TXT (5 MB limit). Text is extracted server-side; original file is not retained.
-2. **Skills** — 15 self-ratings (0–10) measuring preferred work style and skills. Self-assessments, not validated psychometric tests.
-3. **Search** — Country, city, preferred language, keywords, and six quick choices for role / sector / company / work style.
+2. **Work Style** — 20 self-ratings (0–10) measuring preferred work style and skills. Self-assessments, not validated psychometric tests.
+3. **Purpose** — Country, city, preferred language, keywords, and six quick choices for role / sector / company / work style.
 4. **Run** — One explicit run per user per **Europe/Brussels calendar day**. Fetches from authorized sources, checks publication recency (default 14 days), tests listing links, ranks matches and returns **up to five**. No fabricated listings.
-5. **Watchlist & History** — Save roles and revisit prior dated runs.
+5. **MyJobs & History** — Save roles and revisit prior dated runs.
 6. **Application kit** — Generate exactly seven concise motivation points and a CV draft grounded in the uploaded CV and job requirements. Export both as PDF; verify content before submitting.
 
 All scores are heuristic **relevance ratings**, *not hiring probabilities*. A listing link returning HTTP 200 is not absolute proof the job has not been filled; always confirm on the original page.
@@ -43,7 +43,7 @@ Open `http://localhost:8080`. `/health` returns `{ "status": "ok" }`.
 | `OPENAI_API_KEY` | Required for Run and AI application drafts; paid OpenAI API account needed. |
 | `OPENAI_MODEL` | `gpt-4.1-mini` for CV and motivations (Chat Completions). |
 | `OPENAI_SEARCH_MODEL` | `gpt-4.1-mini` for Responses API web_search; optional override. |
-| `MAX_JOB_AGE_DAYS` | `14` (1–30; job recency filter) |
+| `MAX_JOB_AGE_DAYS` | `30` (1–30; job recency filter) |
 
 4. Railway detects Python dependencies with **Railpack**. `railway.json` includes a Gunicorn start command and health check.
 5. Generate a Railway domain and check `/health`, then test registration, CV upload, profile save, Run and PDF export.
@@ -51,7 +51,7 @@ Open `http://localhost:8080`. `/health` returns `{ "status": "ok" }`.
 ### Job sources
 
 - **OpenAI Responses API web_search:** searches the public web for relevant vacancies when Run is clicked. No Adzuna key needed.
-- Candidate CV excerpt (with simple contact redaction), 15 skill ratings and search preferences shape the search. Published dates must be recent; the exact listing URL must appear in web-search sources and return HTTP 200. This is best-effort, **not a guarantee the vacancy is still open**.
+- CV experience is the primary matching evidence. A redacted CV excerpt guides OpenAI job discovery; professional-specialty gates and a separate CV-versus-role review reject clearly unrelated jobs. Work Style (20 ratings) and Purpose shape the remaining ranking only. Published dates must be recent; the exact listing URL must appear in web-search sources and return HTTP 200. This is best-effort, **not a guarantee the vacancy is still open**.
 - Search prioritizes employer-hosted career pages. No LinkedIn/Indeed scraping. Verify site and indexing terms before public launch.
 - **JobFitly shows fewer than five rather than inventing jobs**. A run with no verified matches is not consumed.
 - OpenAI web search charges per tool call and model tokens. The total depends on how many searches the model chooses to make: set an API budget and monitor usage.
@@ -73,3 +73,6 @@ pytest -q
 Stack: Flask, Gunicorn, SQLite, ReportLab, pypdf, python-docx, optional OpenAI web_search.
 
 Brand: white `#FFFFFF`, near-black `#131313`, burgundy `#850D45`, Manrope typeface, approved JobFitly. wordmark.
+### CV-first matching and reset
+
+Run prioritizes CV evidence over stated preferences (90% CV relevance). HR Director and other specialized positions without real CV evidence are excluded. An optional AI review evaluates actual CV responsibilities; when unavailable, a conservative lexical fallback is used. Some source-cited links or dates may be unverifiable; these are explicitly labelled. We show fewer than five rather than inventing relevant jobs. The authenticated **Clear matches and search again** control deletes only that account's past runs and unsaved discovered jobs, preserving saved MyJobs and related drafts. Mobile and desktop view the same account-scoped persistent Railway database and refresh listings when the tab regains focus. A live employer listing may close after discovery; always verify before applying.
