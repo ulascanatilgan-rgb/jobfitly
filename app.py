@@ -33,7 +33,12 @@ QUESTIONS = [
  ('ambiguity','I enjoy solving unfamiliar problems.'),('communication','I am confident presenting my ideas.'),
  ('detail','I notice details others miss.'),('pace','I thrive in fast-moving workplaces.'),
  ('collaboration','I enjoy teamwork.'),('strategy','I like planning for the long term.'),
- ('operations','I like improving how organisations work.')
+ ('operations','I like improving how organisations work.'),
+ ('online_meetings','I enjoy online meetings.'),
+ ('business_travel','I enjoy business travels.'),
+ ('client_energy','I gain energy from client and stakeholder interaction.'),
+ ('resilience','I stay calm and focused under pressure.'),
+ ('ownership','I enjoy taking ownership of results.')
 ]
 SWIPES = [
  ('sector','Sector',['Open to all','Technology','Finance','Healthcare','Creative','Other']),
@@ -43,7 +48,7 @@ SWIPES = [
  ('mode','Work setting',['Remote','Hybrid','On-site','No preference']),
  ('seniority','Career level',['Specialist','Manager','Leadership','Flexible'])
 ]
-MAX_AGE_DAYS = max(1,min(int(os.getenv('MAX_JOB_AGE_DAYS','14')),30))
+MAX_AGE_DAYS = max(1,min(int(os.getenv('MAX_JOB_AGE_DAYS','30')),30))
 STOP = set('the a an and or in on to for of at from with by you your we are is be as have has this that will our their who into ability strong experience work working role team company years including can must should preferred required using plus good excellent'.split())
 
 @contextmanager
@@ -102,7 +107,7 @@ def profile_for(uid):
   if not row:
    c.execute('INSERT INTO profiles(user_id,updated_at) VALUES (?,?)',(uid,now()))
    row=c.execute('SELECT * FROM profiles WHERE user_id=?',(uid,)).fetchone()
- d=dict(row); d['questions']=json.loads(d['questions'] or '{}'); d['swipes']=json.loads(d['swipes'] or '{}'); d['has_cv']=bool(d['cv_text']); d['cv_text_preview']=d['cv_text'][:1100]; d.pop('cv_text'); return d
+ d=dict(row); d['questions']=json.loads(d['questions'] or '{}'); d['swipes']=json.loads(d['swipes'] or '{}'); d['has_cv']=bool(d['cv_text']); d['cv_text_preview']=d['cv_text'][:3200]; d.pop('cv_text'); return d
 
 def tokenize(s): return set(x for x in re.findall(r'[a-zA-Z]{3,}',str(s).lower()) if x not in STOP)
 
@@ -132,7 +137,12 @@ def score_job(job,p):
   'structure':('process','procedure','compliance','standards'),
   'ambiguity':('startup','ambiguous','transform','change'),
   'pace':('fast-paced','rapid','dynamic'),
-  'collaboration':('cross-functional','team','collaborat')
+  'collaboration':('cross-functional','team','collaborat'),
+  'online_meetings':('remote','virtual meeting','video conference','hybrid'),
+  'business_travel':('travel','international','regional','client site'),
+  'client_energy':('stakeholder','client','customer','partnership'),
+  'resilience':('pressure','complex','crisis','challenge'),
+  'ownership':('ownership','accountability','end-to-end','responsibility')
  }
  for skill,phrases in themes.items():
   value=q.get(skill,5)
@@ -208,7 +218,7 @@ def _valid_public_link(link):
 def _check_live(job):
  # Best-effort verification. A 200 response does not guarantee an employer has not closed a role.
  url=job.get('url','')
- if not _valid_public_link(url) or not _recent(job.get('published')):return False
+ if not _valid_public_link(url):return False
  try:
   r=requests.get(url,timeout=7,headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
   # Avoid arbitrary redirects to internal hosts; follow only public HTTPS destinations.
@@ -224,19 +234,37 @@ def _check_live(job):
  except requests.RequestException:return False
 
 def fetch_candidates(profile):
- # OpenAI web search only. Search citations anchor discovered URLs; then we
- # independently require a recent published date and a reachable HTTPS page.
- sources=search_jobs(profile,MAX_AGE_DAYS)
- city=str(profile.get('city') or '').lower().strip()
- country=str(profile.get('country') or '').lower().strip()
- dedup={}
- for j in sources:
-  if not j.get('title') or not j.get('company') or not _recent(j.get('published')) or not _valid_public_link(j.get('url','')):continue
-  if city and city not in str(j.get('city') or '').lower():continue
-  if country and country not in str(j.get('country') or '').lower():continue
-  key=(re.sub(r'\W+','',j['title'].lower()),re.sub(r'\W+','',j['company'].lower()),str(j['city']).lower()[:35])
-  if key not in dedup:dedup[key]=j
- return list(dedup.values()),[]
+ """Progressively widen OpenAI discovery while keeping cited source URLs.
+
+ Prefer fresh local jobs, then country-wide/nearby/remote opportunities. An
+ undated posting is labelled as unverified rather than given a fictitious date.
+ """
+ source_sets=[]
+ original=dict(profile)
+ variants=[(original,14)]
+ broader=dict(original);broader['city']='';variants.append((broader,30))
+ role=str((original.get('swipes') or {}).get('role_type') or '').strip()
+ fallback=dict(original);fallback['city']='';fallback['keywords']=(' '.join([str(original.get('keywords') or ''),role])).strip()[:220]
+ variants.append((fallback,30))
+ seen={};errors=[]
+ for variant,age in variants:
+  try:matches=search_jobs(variant,age)
+  except (requests.RequestException,ValueError) as e:
+   errors.append(type(e).__name__);continue
+  for j in matches:
+   if not j.get('title') or not j.get('company') or not _valid_public_link(j.get('url','')):continue
+   if j.get('published') and not _recent(j['published']):continue
+   # Country is a hard requirement unless the role explicitly offers remote work.
+   country=str(original.get('country') or '').strip().lower()
+   listed_country=str(j.get('country') or '').strip().lower()
+   title_and_description=(str(j.get('title') or '')+' '+str(j.get('description') or '')).lower()
+   remote=any(word in title_and_description for word in ('remote anywhere','remote europe','worldwide remote'))
+   if country and listed_country and country not in listed_country and not remote:continue
+   if not j.get('published'):j['source']='OpenAI web search · date unverified'
+   key=j['url'].split('?')[0].rstrip('/').lower()
+   if key not in seen:seen[key]=j
+  if len(seen)>=12:break
+ return list(seen.values()),errors
 
 def get_run(uid,date=None):
  date=date or today()
@@ -251,7 +279,7 @@ def get_run(uid,date=None):
 def run_search(uid):
  p=profile_for(uid)
  if not p.get('has_cv') or len(p.get('questions',{}))<len(QUESTIONS) or not p.get('swipes') or not p.get('country') or not p.get('city'):
-  return None,'Complete CV, Skills and Search first.',400
+  return None,'Complete CV, Work Style and Purpose first.',400
  # Reserve once per calendar day atomically, even for concurrent requests.
  try:
   with conn() as c:
@@ -270,11 +298,21 @@ def run_search(uid):
    shortlist=ranked[:45]
    verified=list(pool.map(lambda x:_check_live(x[1]),shortlist))
   for (score,j,matches),live in zip(shortlist,verified):
-   if live and score>=5.0:checked.append((score,j,matches))
+   if live:checked.append((score,j,matches))
    if len(checked)==5:break
+  if len(checked)<5:
+   # Some employers reject automated HTTP checks. Keep source-cited candidates,
+   # but explicitly label the unavailable independent check for the user.
+   used={j.get('url') for _,j,_ in checked}
+   for score,j,matches in shortlist:
+    if len(checked)>=5:break
+    if j.get('url') in used:continue
+    j=dict(j)
+    j['source']=str(j.get('source') or 'OpenAI web search')+' · link not independently verified'
+    checked.append((score,j,matches));used.add(j.get('url'))
   if not checked:
    with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=?',(uid,today()))
-   return None,'No verified recent listings found. Adjust Search and retry.',422
+   return None,'No sourced vacancies found today. Your Run was not used. Try a broader Purpose or another location.',422
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
    for k,(score,j,matches) in enumerate(checked):
