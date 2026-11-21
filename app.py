@@ -7,7 +7,8 @@ from contextlib import contextmanager
 import requests
 from job_search import search_jobs
 from matching import lexical_fit, ai_cv_fit, specialty_fit
-from pdf_documents import motivation_pdf, tailored_cv_pdf
+from pdf_documents import motivation_pdf
+from pdf_cv_sidebar import tailored_cv_pdf
 from flask import Flask, render_template, request, jsonify, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -439,7 +440,7 @@ def reset_my_matches():
 @auth_required
 def history():
  uid=session['uid']
- with conn() as c:dates=[r['local_day'] for r in c.execute("SELECT local_day FROM daily_runs WHERE user_id=? AND state='complete' ORDER BY local_day DESC LIMIT 90",(uid,))]
+ with conn() as c:dates=[r['local_day'] for r in c.execute("SELECT local_day FROM daily_runs WHERE user_id=? AND state='complete' ORDER BY local_day DESC",(uid,))]
  return jsonify(runs=[{'date':date,'jobs':get_run(uid,date)[1]} for date in dates])
 
 @app.get('/api/watchlist')
@@ -490,8 +491,8 @@ MOTIVATION STRING must be tailored to the actual employer and vacancy and ground
 - Do not fabricate employers, credentials, dates, quantitative results, duties, experience, or claims of hiring likelihood. Where evidence is missing, do not claim it exists; use a different honestly supported point.
 
 CV STRING should be an application-ready and gracefully organized plain-text CV (PDF layout is applied later):
-- Begin with candidate name; then distinct upper-case headings: PROFILE, EXPERIENCE, EDUCATION, CERTIFICATIONS, SKILLS, LANGUAGES, when actually supported by the CV.
-- Include real roles/employers and dates only if present in original CV. Preserve career chronology, education and credentials.
+- Begin with candidate name; then distinct upper-case headings: PROFILE, PROFESSIONAL EXPERIENCE, PROJECTS, EDUCATION, CERTIFICATIONS, SKILLS, LANGUAGES, when actually supported by the CV.
+- Include real roles/employers and dates only if present in original CV. Preserve career chronology, education and credentials. The CV must fit a clean one-page, two-column layout; limit to about 330-400 meaningful words without inventing or dropping employers.
 - Use short, readable, evidence-backed bullet points; emphasize relevant experience by phrasing, not invention.
 - Never remove original employers or fabricate facts, dates, or achievements.
 - No markdown code fences. Keep the writing concise and natural.

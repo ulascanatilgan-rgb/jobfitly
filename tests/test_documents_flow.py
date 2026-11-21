@@ -5,7 +5,8 @@ from pathlib import Path
 from pypdf import PdfReader
 import pytest
 
-from pdf_documents import motivation_pdf, tailored_cv_pdf, _extract_motivation_sections
+from pdf_documents import motivation_pdf, _extract_motivation_sections
+from pdf_cv_sidebar import tailored_cv_pdf
 
 
 def _sample_motivation():
@@ -66,7 +67,7 @@ def test_tailored_cv_has_professional_header_and_original_evidence():
         city="Brussels, Belgium",email="alex@example.org"
     )
     pages=PdfReader(io.BytesIO(pdf)).pages
-    assert len(pages)>=1
+    assert len(pages)==1
     text="\n".join(page.extract_text() for page in pages)
     assert "Alex Morgan" in text
     assert "Operations Manager" in text
