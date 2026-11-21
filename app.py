@@ -5,6 +5,7 @@ from pathlib import Path
 from functools import wraps
 from contextlib import contextmanager
 import requests
+from job_search import search_jobs
 from flask import Flask, render_template, request, jsonify, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -42,7 +43,6 @@ SWIPES = [
  ('mode','Work setting',['Remote','Hybrid','On-site','No preference']),
  ('seniority','Career level',['Specialist','Manager','Leadership','Flexible'])
 ]
-COUNTRIES = {'belgium':'be','netherlands':'nl','france':'fr','germany':'de','united kingdom':'gb','ireland':'ie','united states':'us','canada':'ca','australia':'au','austria':'at','poland':'pl','spain':'es','italy':'it','switzerland':'ch'}
 MAX_AGE_DAYS = max(1,min(int(os.getenv('MAX_JOB_AGE_DAYS','14')),30))
 STOP = set('the a an and or in on to for of at from with by you your we are is be as have has this that will our their who into ability strong experience work working role team company years including can must should preferred required using plus good excellent'.split())
 
@@ -223,51 +223,20 @@ def _check_live(job):
   return good
  except requests.RequestException:return False
 
-def _adzuna(p):
- appid=os.getenv('ADZUNA_APP_ID','').strip();key=os.getenv('ADZUNA_APP_KEY','').strip()
- if not (appid and key):return []
- country=str(p.get('country','Belgium')).lower().strip();code=COUNTRIES.get(country)
- if not code:return []
- terms=str(p.get('keywords','')).strip() or str(p.get('swipes',{}).get('role_type','')).replace(' & ',' ').strip()
- if terms.lower() in ('open to all','flexible',''):terms='manager'
- city=str(p.get('city','')).strip()
- jobs=[]
- for query in [terms[:85],('manager' if 'manager' not in terms.lower() else 'operations')]:
-  r=requests.get(f'https://api.adzuna.com/v1/api/jobs/{code}/search/1',params={'app_id':appid,'app_key':key,'results_per_page':50,'sort_by':'date','max_days_old':MAX_AGE_DAYS,'what':query,'where':city,'content-type':'application/json'},timeout=16)
-  r.raise_for_status()
-  for i in r.json().get('results',[]):
-   if not i.get('id'):continue
-   loc=(i.get('location') or {}).get('display_name','')
-   jobs.append({'external_id':f"adzuna:{i['id']}",'title':i.get('title',''),'company':(i.get('company') or {}).get('display_name',''),'city':loc,'country':p.get('country',''),'description':i.get('description',''),'url':i.get('redirect_url','').replace('http://','https://',1) if str(i.get('redirect_url','')).startswith(('http://www.adzuna.','http://adzuna.')) else i.get('redirect_url',''),'published':i.get('created',''),'source':'Adzuna'})
- return jobs
-
-def _arbeitnow(p):
- country=str(p.get('country','')).lower().strip()
- if country not in ('germany','belgium','netherlands','austria','france','poland','united kingdom','ireland','spain','italy','switzerland'):return []
- r=requests.get('https://www.arbeitnow.com/api/job-board-api',timeout=16)
- r.raise_for_status()
- rows=r.json().get('data',[])
- matched=[]
- for i in rows:
-  location=i.get('location','') or ''
-  city=(p.get('city') or '').strip().lower()
-  if city and city not in location.lower():continue
-  # Arbeitnow is not always country-tagged, so avoid returning unrelated cities as local matches.
-  if not city and country!='germany':continue
-  matched.append({'external_id':'arbeitnow:'+str(i.get('slug') or i.get('url')),'title':i.get('title',''),'company':i.get('company_name',''),'city':location,'country':p.get('country',''),'description':re.sub('<[^>]+>',' ',i.get('description',''))[:12000],'url':i.get('url',''),'published':i.get('created_at') or i.get('date'),'source':'Arbeitnow'})
- return matched
-
 def fetch_candidates(profile):
- sources=[];errors=[]
- for source in (_adzuna,_arbeitnow):
-  try:sources.extend(source(profile))
-  except requests.RequestException as e:errors.append(f'{source.__name__}: {type(e).__name__}')
+ # OpenAI web search only. Search citations anchor discovered URLs; then we
+ # independently require a recent published date and a reachable HTTPS page.
+ sources=search_jobs(profile,MAX_AGE_DAYS)
+ city=str(profile.get('city') or '').lower().strip()
+ country=str(profile.get('country') or '').lower().strip()
  dedup={}
  for j in sources:
   if not j.get('title') or not j.get('company') or not _recent(j.get('published')) or not _valid_public_link(j.get('url','')):continue
+  if city and city not in str(j.get('city') or '').lower():continue
+  if country and country not in str(j.get('country') or '').lower():continue
   key=(re.sub(r'\W+','',j['title'].lower()),re.sub(r'\W+','',j['company'].lower()),str(j['city']).lower()[:35])
-  if key not in dedup or j.get('source')=='Adzuna':dedup[key]=j
- return list(dedup.values()),errors
+  if key not in dedup:dedup[key]=j
+ return list(dedup.values()),[]
 
 def get_run(uid,date=None):
  date=date or today()
@@ -305,7 +274,7 @@ def run_search(uid):
    if len(checked)==5:break
   if not checked:
    with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=?',(uid,today()))
-   return None,'No verified fresh listings found. Adjust Search or configure Adzuna, then retry.',422
+   return None,'No verified recent listings found. Adjust Search and retry.',422
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
    for k,(score,j,matches) in enumerate(checked):
@@ -317,14 +286,14 @@ def run_search(uid):
  except Exception as e:
   with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state=?',(uid,today(),'working'))
   app.logger.exception('Job search failed: %s',type(e).__name__)
-  return None,'The job sources are temporarily unavailable. Retry later.',502
+  return None,'Job search is temporarily unavailable. Check OpenAI billing and Railway logs, then retry.',502
 
 @app.get('/')
 def index():return render_template('index.html')
 @app.get('/health')
 def health():return jsonify(status='ok')
 @app.get('/api/config')
-def config():return jsonify(questions=[{'id':x,'text':y} for x,y in QUESTIONS],swipes=[{'id':x,'label':y,'choices':z} for x,y,z in SWIPES],live_jobs=bool(os.getenv('ADZUNA_APP_ID') and os.getenv('ADZUNA_APP_KEY')),ai=bool(os.getenv('OPENAI_API_KEY')),csrf=csrf_token())
+def config():return jsonify(questions=[{'id':x,'text':y} for x,y in QUESTIONS],swipes=[{'id':x,'label':y,'choices':z} for x,y,z in SWIPES],live_jobs=bool(os.getenv('OPENAI_API_KEY')),ai=bool(os.getenv('OPENAI_API_KEY')),csrf=csrf_token())
 @app.post('/api/register')
 def register():
  d=request.get_json(silent=True) or {}; email=str(d.get('email','')).strip().lower(); password=str(d.get('password',''))
