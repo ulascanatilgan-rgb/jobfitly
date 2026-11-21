@@ -29,6 +29,13 @@ def _clean(value):
     return str(value or "").strip()
 
 
+def _fit_text(value,font,size,width):
+    value=_clean(value)
+    if stringWidth(value,font,size)<=width:return value
+    while value and stringWidth(value+'...',font,size)>width:value=value[:-1]
+    return value.rstrip()+'...'
+
+
 def _xml(value):
     return html.escape(_clean(value)).replace("\n", "<br/>")
 
@@ -164,7 +171,7 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email=""):
     stream=io.BytesIO()
     width=W-LEFT-RIGHT
     doc=SimpleDocTemplate(stream,pagesize=A4,leftMargin=LEFT,rightMargin=RIGHT,
-        topMargin=80,bottomMargin=67,title=f"CV | {name} | {role}")
+        topMargin=104,bottomMargin=67,title=f"CV | {name} | {role}")
     body=ParagraphStyle("cv-body",fontName="Helvetica",fontSize=9.2,leading=14.4,
         textColor=INK,spaceAfter=5)
     heading=ParagraphStyle("cv-head",fontName="Helvetica-Bold",fontSize=10.2,leading=15,
@@ -191,11 +198,13 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email=""):
     def header(c,document):
         c.saveState()
         c.setFillColor(INK);c.setFont("Helvetica-Bold",18)
-        c.drawString(LEFT,H-46,name[:48])
-        c.setFillColor(MUTED);c.setFont("Helvetica",9)
-        c.drawString(LEFT,H-63,f"Application: {_clean(role)[:80]}")
+        c.drawString(LEFT,H-46,_fit_text(name,"Helvetica-Bold",18,width))
+        c.setFillColor(INK);c.setFont("Helvetica",9)
+        c.drawString(LEFT,H-63,_fit_text(role,"Helvetica",9,width))
+        c.setFillColor(MUTED);c.setFont("Helvetica",8.5)
+        c.drawString(LEFT,H-78,_fit_text("Application to "+_clean(company),"Helvetica",8.5,width))
         c.setStrokeColor(RULE);c.setLineWidth(.8)
-        c.line(LEFT,H-70,W-RIGHT,H-70)
+        c.line(LEFT,H-91,W-RIGHT,H-91)
         c.setStrokeColor(RULE);c.line(LEFT,53,W-RIGHT,53)
         c.setFillColor(MUTED);c.setFont("Helvetica",8)
         contact=" · ".join(v for v in (_clean(city),_clean(email)) if v)

@@ -46,7 +46,7 @@
        (ready?'':'disabled')+'>Let’s find ↗</button>' +
        (ready?'':'<p class="flow-muted">Complete steps 1–3 to start.</p>')+'</div>';
     var jobs=state.jobs.length
-       ?'<div class="jobs-grid flow-results-grid">'+state.jobs.map(function(j,i){return jobCard(j,i)}).join("")+'</div>'
+       ?'<div class="jobs-grid flow-results-grid">'+state.jobs.slice().sort(function(a,b){return Number(b.score||0)-Number(a.score||0)}).map(function(j,i){return jobCard(j,i)}).join("")+'</div>'
        :(state.has_run?'<p class="flow-muted">No suitable jobs in this run.</p>':'');
     $("main-panel").innerHTML='<div class="page-kicker">STEP 04</div>' +
       '<h1 class="page-heading">Let’s find<span class="accent">.</span></h1>' +

@@ -48,6 +48,12 @@ SECTIONS={
 def _plain(value):
     return str(value or "").strip()
 
+def _fit_text(value,font,size,width):
+    value=_plain(value)
+    if stringWidth(value,font,size)<=width:return value
+    while value and stringWidth(value+'...',font,size)>width:value=value[:-1]
+    return value.rstrip()+'...'
+
 def _p(value,size,leading,bold=False,color=INK):
     return Paragraph(html.escape(_plain(value)),ParagraphStyle(
         "cv-panel",fontName="Helvetica-Bold" if bold else "Helvetica",
@@ -143,17 +149,18 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email=""):
     sidebar("CONTACT",[x for x in (_plain(email),_plain(city)) if x])
     sidebar("SKILLS",skills)
     sidebar("LANGUAGES",languages)
+    if side_y<38:
+        raise ValueError("CV sidebar is too long for the one-page layout.")
     # Right career column.
     c.setFillColor(INK);c.setFont("Helvetica-Bold",18)
-    c.drawString(RIGHT_X,H-45,name[:39])
+    c.drawString(RIGHT_X,H-45,_fit_text(name,"Helvetica-Bold",18,RIGHT_W))
     c.setFillColor(MUTED);c.setFont("Helvetica",9)
-    title=_plain(role)
-    if stringWidth(title,"Helvetica",9)>RIGHT_W:
-        title=title[:72]
-    c.drawString(RIGHT_X,H-61,title)
+    c.drawString(RIGHT_X,H-61,_fit_text(role,"Helvetica",9,RIGHT_W))
+    c.setFillColor(BURGUNDY);c.setFont("Helvetica",8)
+    c.drawString(RIGHT_X,H-76,_fit_text("Application to "+_plain(company),"Helvetica",8,RIGHT_W))
     c.setStrokeColor(LINE);c.setLineWidth(.8)
-    c.line(RIGHT_X,H-74,W-42,H-74)
-    y=H-94
+    c.line(RIGHT_X,H-90,W-42,H-90)
+    y=H-110
     for section,rows,_ in prepared:
         c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.1)
         c.drawString(RIGHT_X,y,section[:55])
