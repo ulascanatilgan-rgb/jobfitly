@@ -404,3 +404,15 @@ body{font-size:13px}
  .landing-clean .landing-footer-price{font-size:12px}
  .landing-clean .landing-footer-tagline{font-size:9px}
 }
+
+/* Position the weekly price directly beneath the login action, not at the screen bottom. */
+.hero-clean-inner .hero-pricing{display:flex;justify-content:flex-end;align-items:baseline;gap:10px;margin:23px 0 6px;text-align:right;flex-wrap:wrap}
+.hero-clean-inner .hero-pricing-price{font-size:14px;font-weight:800;letter-spacing:-.035em;color:#850d45;white-space:nowrap}
+.hero-clean-inner .hero-pricing-tagline{font-size:10px;font-weight:500;letter-spacing:-.01em;color:#777}
+.landing-clean .reveal-pricing{animation-delay:5.5s}
+@media(max-width:790px){
+ .hero-clean-inner .hero-pricing{margin:19px 0 0;gap:5px 8px;justify-content:flex-end}
+ .hero-clean-inner .hero-pricing-price{font-size:12px}
+ .hero-clean-inner .hero-pricing-tagline{font-size:9px}
+ .landing-clean .landing-footer{padding-top:9px;padding-bottom:10px}
+}
