@@ -26,7 +26,7 @@ def test_search_cards_do_not_show_search_provider():
     js=(root/'static/app.js').read_text()
     flow=(root/'static/flow.js').read_text()
     card=js.split('function jobCard(',1)[1].split('function reloadJobs(',1)[0]
-    assert 'j.source' not in card
+    assert 'esc(j.source)' not in card and 'OpenAI web search' not in card
     assert 'b.score' in flow and '.sort(' in flow
     assert 'Update CV · PDF' in js
 
