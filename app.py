@@ -27,6 +27,8 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY') or ('local-development-only' if not os.getenv('RAILWAY_ENVIRONMENT') else None)
 if not app.secret_key: raise RuntimeError('SECRET_KEY must be set in Railway Variables')
 app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE','1' if os.getenv('RAILWAY_ENVIRONMENT') else '0')=='1')
+# A signed HttpOnly cookie, not a stored password, powers opt-in persistent sign-in.
+app.permanent_session_lifetime = datetime.timedelta(days=60)
 
 QUESTIONS = [
  ('analytical','I enjoy analysing facts and patterns.'),('creative','I like inventing new ideas.'),
@@ -364,14 +366,14 @@ def register():
   with conn() as c:
    cur=c.execute('INSERT INTO users(email,password_hash,created_at) VALUES(?,?,?)',(email,generate_password_hash(password),now())); uid=cur.lastrowid
    c.execute('INSERT INTO profiles(user_id,updated_at) VALUES(?,?)',(uid,now()))
-  session.clear();session['uid']=uid;return jsonify(ok=True,email=email,csrf=csrf_token())
+  session.clear();session.permanent=d.get('remember') is True;session['uid']=uid;return jsonify(ok=True,email=email,csrf=csrf_token())
  except sqlite3.IntegrityError:return jsonify(error='This email is already registered.'),409
 @app.post('/api/login')
 def login():
  d=request.get_json(silent=True) or {};email=str(d.get('email','')).strip().lower()
  with conn() as c:r=c.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
  if not r or not check_password_hash(r['password_hash'],str(d.get('password',''))):return jsonify(error='Incorrect email or password.'),401
- session.clear();session['uid']=r['id'];return jsonify(ok=True,email=email,csrf=csrf_token())
+ session.clear();session.permanent=d.get('remember') is True;session['uid']=r['id'];return jsonify(ok=True,email=email,csrf=csrf_token())
 @app.post('/api/logout')
 def logout():session.clear();return jsonify(ok=True,csrf=csrf_token())
 @app.get('/api/me')

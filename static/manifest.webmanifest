@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "JobFitly",
+  "short_name": "JobFitly",
+  "description": "Jobs that fit you",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#850d45",
+  "icons": [
+    {
+      "src": "/static/jobfitly-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

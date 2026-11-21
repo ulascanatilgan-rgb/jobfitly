@@ -4,7 +4,7 @@
     {id:"cv",num:"01",title:"Upload your CV",desc:"Your career experience comes first."},
     {id:"skills",num:"02",title:"Tell about yourself",desc:"20 short work-style questions."},
     {id:"search",num:"03",title:"What you search",desc:"Location, sector and job direction."},
-    {id:"results",num:"04",title:"Let's search",desc:"Up to five roles that fit your CV."},
+    {id:"results",num:"04",title:"Let's find",desc:"Up to five roles that fit your CV."},
     {id:"watch",num:"05",title:"Watchlist",desc:"Selected jobs, motivation and CV."},
     {id:"history",num:"06",title:"History",desc:"Your previous searches and results."}
   ];
@@ -43,13 +43,13 @@
        '<button type="button" onclick="resetMyMatches()">Clear and search again ↺</button></div>'
       :'<div class="flow-result-start"><p>Your CV leads the matching. Preferences refine the selection.</p>' +
        '<button class="btn btn-dark flow-run" id="run-button" onclick="reloadJobs()" ' +
-       (ready?'':'disabled')+'>Search for jobs ↗</button>' +
+       (ready?'':'disabled')+'>Let’s find ↗</button>' +
        (ready?'':'<p class="flow-muted">Complete steps 1–3 to start.</p>')+'</div>';
     var jobs=state.jobs.length
        ?'<div class="jobs-grid flow-results-grid">'+state.jobs.map(function(j,i){return jobCard(j,i)}).join("")+'</div>'
        :(state.has_run?'<p class="flow-muted">No suitable jobs in this run.</p>':'');
     $("main-panel").innerHTML='<div class="page-kicker">STEP 04</div>' +
-      '<h1 class="page-heading">Let’s search<span class="accent">.</span></h1>' +
+      '<h1 class="page-heading">Let’s find<span class="accent">.</span></h1>' +
       '<p class="page-subheading">Up to five relevant jobs. No random listings.</p>' +
       status+jobs+'<p class="flow-verification">Confirm each vacancy on the employer’s website before applying.</p>';
   };

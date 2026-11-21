@@ -86,7 +86,7 @@ def test_six_step_page_and_original_portrait_file():
     assert js.count('id:"')==6
     for title in (
         "Upload your CV","Tell about yourself","What you search",
-        "Let's search","Watchlist","History"
+        "Let's find","Watchlist","History"
     ):
         assert title in js
     assert 'Your profile' in html and 'Log out' in html
