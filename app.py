@@ -107,22 +107,68 @@ def profile_for(uid):
 def tokenize(s): return set(x for x in re.findall(r'[a-zA-Z]{3,}',str(s).lower()) if x not in STOP)
 
 def score_job(job,p):
- text=((job['title'] or '')+' '+(job['description'] or '')).lower()
- terms=tokenize(p.get('keywords','')) | tokenize(p.get('cv_text_preview',''))
- matches=sorted((tokenize(text)&terms),key=len,reverse=True)
- # Score is an indicative profile relevance score; NOT hire probability.
- score=4.7 + min(2.2,len(matches)*0.24)
- city=(p.get('city') or '').lower().strip(); country=(p.get('country') or '').lower().strip()
- if city and city in ((job['city'] or '').lower()): score+=1.15
- if country and country in ((job['country'] or '').lower()):score+=0.5
- pref=p.get('swipes',{}); q=p.get('questions',{})
- for key,terms2 in [('people',['client','customer','stakeholder','relationship','communication']),('analytical',['data','analysis','analytical','financial']),('coordination',['project','manage','coordinate','operations']),('creative',['design','creative','brand','content']),('operations',['process','operations','delivery','logistics'])]:
-  v=q.get(key,5)
-  if isinstance(v,(int,float)) and v>=7 and any(t in text for t in terms2):score+=0.13
- if pref.get('role_type')=='Operations & strategy' and any(t in text for t in ('operation','strateg','program')): score+=0.32
- if pref.get('role_type')=='People & relationships' and any(t in text for t in ('client','sale','relationship')): score+=0.32
- if pref.get('role_type')=='Creative & product' and any(t in text for t in ('product','technolog','software')): score+=0.32
- return min(9.8,round(score,1)),matches[:5]
+ """Conservative, explainable relevance score. It is NOT a hiring probability."""
+ text=(' '.join([str(job.get('title') or ''),str(job.get('description') or '')])).lower()
+ title=str(job.get('title') or '').lower()
+ terms=tokenize(p.get('keywords',''))|tokenize(p.get('cv_text_preview',''))
+ matches=sorted(tokenize(text)&terms)
+ score=2.8 + min(3.4,0.34*len(matches))
+ city=(p.get('city') or '').lower().strip()
+ if city and city in str(job.get('city') or '').lower():score+=0.9
+ pref=p.get('swipes',{}) or {}
+ q=p.get('questions',{}) or {}
+ themes={
+  'analytical':('data','analys','financial','research','report'),
+  'creative':('design','creativ','innov','brand','content'),
+  'people':('client','customer','stakeholder','partner','relationship'),
+  'coordination':('project','coordinat','program','operation'),
+  'leadership':('lead','head of','manager','director'),
+  'strategy':('strateg','planning','business development'),
+  'operations':('operation','process','delivery','logistics'),
+  'communication':('communication','present','relationship','stakeholder'),
+  'detail':('risk','audit','accuracy','quality','compliance'),
+  'desk':('analyst','reporting','documentation','data'),
+  'autonomy':('independent','ownership','self-starter'),
+  'structure':('process','procedure','compliance','standards'),
+  'ambiguity':('startup','ambiguous','transform','change'),
+  'pace':('fast-paced','rapid','dynamic'),
+  'collaboration':('cross-functional','team','collaborat')
+ }
+ for skill,phrases in themes.items():
+  value=q.get(skill,5)
+  if isinstance(value,(int,float)) and any(word in text for word in phrases):
+   if value>=7:score+=0.075
+   elif value<=3:score-=0.075
+ role=pref.get('role_type','')
+ role_terms={'Operations & strategy':('operation','strateg','project','program'),
+             'People & relationships':('client','sales','customer','partnership','relationship'),
+             'Analytical':('analysis','analyst','data','audit','finance','risk'),
+             'Creative & product':('product','design','creativ','brand','marketing')}
+ if role in role_terms:
+  score+=0.65 if any(w in text for w in role_terms[role]) else -0.5
+ sector=pref.get('sector','')
+ sectors={'Technology':('software','technology','ai ','engineering','cloud','saas'),
+          'Finance':('bank','finance','investment','fintech','insurance'),
+          'Healthcare':('medical','health','pharma','clinical','patient'),
+          'Creative':('design','artist','marketing','creative','studio','museum')}
+ if sector in sectors:score+=0.45 if any(w in text for w in sectors[sector]) else -0.25
+ mode=pref.get('mode','')
+ if mode in ('Remote','Hybrid','On-site'):
+  hints={'Remote':('remote','work from home'), 'Hybrid':('hybrid','flexible work'), 'On-site':('on-site','on site','office-based')}
+  if any(w in text for w in hints[mode]):score+=0.3
+  elif mode=='Remote' and 'on-site' in text:score-=0.45
+ level=pref.get('seniority','')
+ if level=='Manager':score+=0.35 if any(w in title for w in ('manager','lead','head')) else -0.15
+ if level=='Leadership':score+=0.35 if any(w in title for w in ('director','head','chief','vp ','lead')) else -0.2
+ if level=='Specialist':score+=0.25 if any(w in title for w in ('specialist','associate','analyst','advisor')) else 0
+ priority=pref.get('priority','')
+ if priority=='Growth' and any(w in text for w in ('growth','scale','build','leadership')):score+=0.15
+ if priority=='Balance' and any(w in text for w in ('flexible','hybrid','work-life')):score+=0.15
+ if priority=='Security' and any(w in text for w in ('permanent','stable','long-term')):score+=0.15
+ environment=pref.get('environment','')
+ if environment=='Startup' and any(w in text for w in ('startup','start-up','early-stage')):score+=0.3
+ if environment=='Established company' and any(w in text for w in ('global','multinational','established')):score+=0.3
+ return round(max(1.5,min(9.8,score)),1),matches[:6]
 
 def get_jobs(uid,watch_only=False):
  p=profile_for(uid)
@@ -255,7 +301,7 @@ def run_search(uid):
    shortlist=ranked[:45]
    verified=list(pool.map(lambda x:_check_live(x[1]),shortlist))
   for (score,j,matches),live in zip(shortlist,verified):
-   if live:checked.append((score,j,matches))
+   if live and score>=5.0:checked.append((score,j,matches))
    if len(checked)==5:break
   if not checked:
    with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=?',(uid,today()))
