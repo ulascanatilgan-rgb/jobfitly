@@ -39,3 +39,139 @@
  .landing-clean .landing-footer{padding:22px 25px 26px;gap:10px}
 }
 @media(prefers-reduced-motion:reduce){.hero-clean-button{transition:none}}
+
+/* JobFitly compact v0.4 — restrained, high-contrast, single-accent design */
+:root{--plum:#850d45;--ink:#171717;--line:#dcdcdc;--muted:#555}
+.main-panel{max-width:1080px;padding:35px 38px 75px}
+.page-heading{font-size:clamp(28px,3vw,40px);line-height:1.18;letter-spacing:-.05em;margin-bottom:10px}
+.page-kicker{font-size:10px;letter-spacing:.12em;margin-bottom:7px}
+.page-subheading{font-size:12.5px;line-height:1.58;margin-bottom:19px;color:#555}
+.nav button{font-size:12px;padding:11px 13px}
+.sidebar-quote{font-size:12px}
+.run-panel{padding:22px 23px;margin:14px 0 20px;border:1px solid #d4d4d4;border-radius:14px}
+.run-panel h2{font-size:clamp(22px,2.4vw,29px);margin:4px 0 6px}
+.run-panel p{font-size:12px;margin-bottom:13px}
+.status-line{margin:14px 0 14px;border:1px solid #d9d9d9;background:#fff;color:#444}
+.setup-row{margin:15px 0;gap:7px}
+.setup-row button{font-size:11px;padding:8px 12px}
+.jobs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(218px,1fr));gap:11px;margin-top:15px}
+.jobs-grid>.job-card,.jobs-grid>.job-card:first-child{
+ grid-column:auto;min-height:146px;max-width:none;
+ padding:15px 16px;border-radius:13px;
+ background:rgba(245,244,244,.74);border:1px solid rgba(133,13,69,.20);
+ box-shadow:0 3px 10px rgba(0,0,0,.025);
+ backdrop-filter:blur(6px);
+}
+.job-card:hover{border-color:rgba(133,13,69,.55);box-shadow:0 5px 17px rgba(0,0,0,.05)}
+.job-top{gap:11px}
+.job-company{font-size:10.5px;margin:0 0 7px;color:#3a3a3a}
+.job-title{font-size:clamp(14px,1.25vw,17px);line-height:1.31;letter-spacing:-.025em;margin:0 0 8px;max-width:100%}
+.job-loc{font-size:10px;line-height:1.45;color:#646464}
+.score-circle{width:49px;height:49px;border-radius:11px;border-color:#e4c7d4;background:#fff}
+.score-circle strong{font-size:15px}
+.score-circle small{font-size:7px}
+.job-bottom{margin-top:14px;gap:8px}
+.text-action{font-size:11px}
+.save-button{font-size:10px;padding:8px 10px;border-color:#d8cbd1}
+.reset-actions{display:flex;justify-content:flex-end;margin:8px 0 14px}
+.reset-matches{background:transparent;border:0;border-bottom:1px solid #aaa;color:#555;font-weight:650;font-size:11px;padding:5px 0}
+.reset-matches:hover{color:var(--plum);border-color:var(--plum)}
+.history-row{border-bottom:1px solid #d4d4d4;padding:13px 0}
+.history-role{flex:1;min-width:0}
+.history-link{display:flex;flex-direction:column;gap:4px;padding:6px 0;color:#171717;text-decoration:none}
+.history-link:hover strong{color:var(--plum);text-decoration:underline;text-underline-offset:3px}
+.history-link strong{font-size:12px}
+.history-link span{font-size:10px;line-height:1.45}
+.saved-row{padding:15px 17px;gap:12px;border-color:#d7d7d7}
+.saved-row h3{font-size:15px}
+.saved-actions .btn{padding:9px 12px;min-height:38px;font-size:10px}
+.profile-box{padding:19px;border-color:#dedede}
+.profile-box h3{font-size:14px}
+.profile-box p{margin-bottom:11px}
+.metric .num{font-size:21px}
+.hero.hero-clean{padding-top:25px;padding-bottom:48px}
+.landing-head-clean{height:95px;padding-top:25px}
+.landing-head-clean .brand-logo{height:43px}
+.hero-clean h1{font-size:clamp(33px,3.7vw,51px);line-height:1.14;margin-bottom:19px}
+.hero-clean .hero-clean-lead{font-size:clamp(16px,1.65vw,20px);line-height:1.5;letter-spacing:-.018em;margin-bottom:22px;font-weight:650}
+.hero-clean-divider{height:1px;background:#cacaca;margin-bottom:22px}
+.hero-clean .hero-clean-description{font-size:clamp(14px,1.2vw,16px);line-height:1.7;margin-bottom:25px;max-width:750px}
+.hero-clean .hero-clean-closing{font-size:clamp(16px,1.65vw,20px);margin-bottom:22px}
+.hero-clean-actions{gap:12px}
+.hero-clean-button{padding:12px 18px;min-height:48px;border-radius:10px;font-size:12px}
+.landing-clean .landing-footer{padding-top:16px;padding-bottom:18px}
+
+/* Soft sequential reveal — typography stays readable after animation. */
+@keyframes jobfitly-reveal{
+ from{opacity:0;transform:translateY(13px)}
+ to{opacity:1;transform:translateY(0)}
+}
+.reveal-intro{animation:jobfitly-reveal .85s cubic-bezier(.22,.65,.25,1) both}
+.reveal-2{animation-delay:.16s}
+.reveal-3{animation-delay:.28s}
+.reveal-4{animation-delay:.44s}
+.reveal-5{animation-delay:.62s}
+.reveal-6{animation-delay:.79s}
+.jobs-grid>.job-card{animation:jobfitly-reveal .45s ease-out both}
+.jobs-grid>.job-card:nth-child(2){animation-delay:.07s}
+.jobs-grid>.job-card:nth-child(3){animation-delay:.13s}
+.jobs-grid>.job-card:nth-child(4){animation-delay:.19s}
+.jobs-grid>.job-card:nth-child(5){animation-delay:.25s}
+
+@media(max-width:700px){
+ .landing-head-clean{height:76px;padding:17px 20px 0}
+ .landing-head-clean .brand-logo{height:38px}
+ .hero.hero-clean{padding:11px 20px 32px}
+ .hero-clean h1{font-size:clamp(29px,7.6vw,36px);margin-bottom:15px;letter-spacing:-.048em}
+ .hero-clean .hero-clean-lead{font-size:15px;line-height:1.46;margin-bottom:16px}
+ .hero-clean-divider{height:1px;background:#c9c9c9;margin-bottom:16px}
+ .hero-clean .hero-clean-description{font-size:13px;line-height:1.56;margin-bottom:17px}
+ .hero-clean .hero-clean-closing{font-size:15px;line-height:1.4;margin-bottom:16px}
+ .hero-clean-button{font-size:12px;min-height:43px;padding:11px 16px}
+ .hero-clean .hero-clean-login{font-size:11px}
+ .landing-clean .landing-footer{padding:15px 20px;gap:8px}
+ .mobile-top{height:54px;min-height:54px;padding:0 14px;border-bottom:1px solid #cfcfcf;display:flex;align-items:center;justify-content:space-between}
+ .mobile-logo-home{padding:2px 0;background:transparent;border:0;display:flex;align-items:center}
+ .mobile-logo-home .brand-logo{height:32px;max-width:115px}
+ .mobile-top-actions{display:flex;align-items:center;gap:7px}
+ .mobile-top-button{border:1px solid #d5d5d5;background:#fff;border-radius:8px;color:#171717;font-size:10px;font-weight:800;min-height:36px;padding:6px 10px}
+ .mobile-top-button:hover{border-color:var(--plum)}
+ .main-panel{padding:19px 16px 88px;max-width:100%}
+ .page-heading{font-size:26px;line-height:1.18;margin-bottom:7px;letter-spacing:-.04em}
+ .page-kicker{font-size:9px;margin-bottom:5px}
+ .page-subheading{font-size:11.5px;line-height:1.5;margin-bottom:13px}
+ .run-panel{padding:17px 16px;margin:11px 0 13px;border-radius:12px}
+ .run-panel h2{font-size:22px}
+ .run-panel p{font-size:11px}
+ .run-panel .btn{min-height:42px}
+ .status-line{margin:10px 0;font-size:10px;gap:8px}
+ .jobs-grid{grid-template-columns:1fr;gap:9px;margin-top:12px}
+ .jobs-grid>.job-card,.jobs-grid>.job-card:first-child{min-height:128px;padding:13px 14px}
+ .job-title{font-size:15px;margin-bottom:6px}
+ .job-company{font-size:10px}
+ .job-bottom{margin-top:10px}
+ .score-circle{height:45px;width:45px}
+ .setup-row{gap:7px;margin:12px 0}
+ .setup-row button{font-size:10px;padding:8px 11px}
+ .mobile-nav{height:63px;padding-bottom:env(safe-area-inset-bottom);border-top:1px solid #bdbdbd}
+ .mobile-nav button{min-width:0;flex:1;font-size:9px;font-weight:800;gap:1px}
+ .mobile-nav button span{font-size:17px}
+ .mobile-nav button.active{color:#850d45!important}
+ .profile-box{padding:15px}
+ .profile-grid{gap:11px}
+ .saved-row{padding:13px 14px;gap:10px}
+ .saved-row h3{font-size:15px}
+ .saved-actions{gap:6px;justify-content:flex-start}
+ .saved-actions .btn{font-size:9.5px;padding:9px}
+ .history-row{gap:10px}
+ .history-row strong{font-size:11px}
+ .history-row .save-button{white-space:nowrap}
+ .reset-actions{margin:4px 0 10px}
+ .skills-grid{gap:8px}
+ .skill-item{padding:12px}
+ .modal{padding:18px;border-radius:13px}
+ .modal h2{font-size:24px}
+}
+@media(prefers-reduced-motion:reduce){
+ .reveal-intro,.jobs-grid>.job-card{animation:none!important;opacity:1!important;transform:none!important}
+}

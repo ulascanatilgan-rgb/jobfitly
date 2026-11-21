@@ -54,7 +54,7 @@ def _output_text(response):
 
 
 def _safe_cv_excerpt(profile):
-    text = str(profile.get("cv_text_preview") or "")[:2200]
+    text = str(profile.get("cv_for_matching") or profile.get("cv_text_preview") or "")[:7200]
     text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[email omitted]", text)
     text = re.sub(r"(?<!\w)\+?\d[\d\s()./-]{8,}\d(?!\w)", "[phone omitted]", text)
     return text
@@ -78,7 +78,12 @@ def search_jobs(profile, max_age_days=14):
     }
     prompt = (
         f"Today is {date.isoformat()} UTC. Search the live web for 10–15 specific, "
-        "genuine job openings relevant to this applicant. Use direct employer job pages, "
+        "genuine job openings whose real duties and professional qualifications follow " 
+        "DIRECTLY from the applicant CV. CV is the main evidence, while wishes and " 
+        "work style are secondary. Never recommend an HR Director role to a security, " 
+        "audit, banking, or operations professional without HR leadership experience. " 
+        "Avoid roles with unrelated professional licenses or unrelated core specialisms. " 
+        "Use direct employer job pages, "
         "Greenhouse, Lever, Workday, Teamtailor, SmartRecruiters or official boards. "
         "Apply language, country and career fit carefully. Prefer openings from the "
         f"last {max_age_days} days. Search multiple appropriate job titles, not only "
@@ -146,6 +151,17 @@ def search_jobs(profile, max_age_days=14):
             continue
         if published and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
             continue
+        language = str(profile.get("language") or "English").strip().lower()
+        if language == "english":
+            # A stated compulsory local-language requirement is a hard constraint.
+            role_text = (title + " " + description).lower()
+            if any(phrase in role_text for phrase in (
+                "fluent dutch required", "dutch is mandatory", "native dutch",
+                "dutch language required", "excellent dutch required",
+                "fluent french required", "french is mandatory", "native french",
+                "french language required"
+            )):
+                continue
         seen.add(identity)
         output.append({
             "external_id": "openai:" + url[:450],

@@ -6,6 +6,7 @@ from functools import wraps
 from contextlib import contextmanager
 import requests
 from job_search import search_jobs
+from matching import lexical_fit, ai_cv_fit, specialty_fit
 from flask import Flask, render_template, request, jsonify, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -263,7 +264,7 @@ def fetch_candidates(profile):
    if not j.get('published'):j['source']='OpenAI web search · date unverified'
    key=j['url'].split('?')[0].rstrip('/').lower()
    if key not in seen:seen[key]=j
-  if len(seen)>=12:break
+  if len([job for job in seen.values() if lexical_fit(job, original.get('cv_for_matching') or original.get('cv_text_preview'))[0] >= 60]) >= 10:break
  return list(seen.values()),errors
 
 def get_run(uid,date=None):
@@ -280,51 +281,72 @@ def run_search(uid):
  p=profile_for(uid)
  if not p.get('has_cv') or len(p.get('questions',{}))<15 or not p.get('swipes') or not p.get('country') or not p.get('city'):
   return None,'Complete CV, Work Style and Purpose first.',400
- # Reserve once per calendar day atomically, even for concurrent requests.
+ # Read the actual uploaded CV server-side. It must be the primary matching source.
+ with conn() as c:
+  row=c.execute('SELECT cv_text FROM profiles WHERE user_id=?',(uid,)).fetchone()
+ p['cv_for_matching']=str(row['cv_text'] if row else '')[:15000]
+ if not p['cv_for_matching'].strip():return None,'Upload a readable CV before running.',400
  try:
   with conn() as c:
    c.execute('INSERT INTO daily_runs(user_id,local_day,run_at,state) VALUES(?,?,?,?)',(uid,today(),now(),'working'))
- except sqlite3.IntegrityError:return None,'Today’s Run was already used.',409
+ except sqlite3.IntegrityError:return None,'Today’s Run was already used. Use Reset matches to start again.',409
  try:
   raw,errors=fetch_candidates(p)
-  ranked=[]
+  # A specialized job without corresponding real CV history never passes.
+  candidates=[]
   for j in raw:
-   score,matches=score_job(j,p)
-   ranked.append((score,j,matches))
-  ranked.sort(key=lambda a:a[0],reverse=True)
+   cv_fit,evidence=lexical_fit(j,p['cv_for_matching'])
+   if cv_fit<60 or not specialty_fit(j.get('title'),p['cv_for_matching']):continue
+   candidates.append((j,cv_fit,evidence))
+  # Semantic validation checks requirements vs. real CV, not aspirations.
+  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:35]])
+  ranked=[]
+  for idx,(j,cv_fit,evidence) in enumerate(candidates):
+   if ai:
+    assessment=ai.get(idx)
+    if not assessment:continue
+    semantic=assessment['cv_fit']
+    if semantic<60:continue
+    cv_score=0.8*semantic+0.2*cv_fit
+   else:
+    cv_score=cv_fit
+   _,preferences=score_job(j,p)
+   # CV fit determines 90% of match rating. Preferences are secondary.
+   pref_score=score_job(j,p)[0]
+   final=round(max(1,min(9.6,0.9*(cv_score/10)+0.1*pref_score)),1)
+   if final<5.9:continue
+   ranked.append((final,j,evidence))
+  ranked.sort(key=lambda entry:entry[0],reverse=True)
+  shortlist=ranked[:35]
   checked=[]
-  # Do not fill with fake or expired listings; freshness remains best effort, not a guarantee.
-  with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
-   shortlist=ranked[:45]
-   verified=list(pool.map(lambda x:_check_live(x[1]),shortlist))
-  for (score,j,matches),live in zip(shortlist,verified):
-   if live:checked.append((score,j,matches))
+  with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+   verified=list(pool.map(lambda entry:_check_live(entry[1]),shortlist))
+  for entry,live in zip(shortlist,verified):
+   if live:checked.append(entry)
    if len(checked)==5:break
   if len(checked)<5:
-   # Some employers reject automated HTTP checks. Keep source-cited candidates,
-   # but explicitly label the unavailable independent check for the user.
-   used={j.get('url') for _,j,_ in checked}
-   for score,j,matches in shortlist:
+   used={job.get('url') for _,job,_ in checked}
+   for score,job,evidence in shortlist:
     if len(checked)>=5:break
-    if j.get('url') in used:continue
-    j=dict(j)
-    j['source']=str(j.get('source') or 'OpenAI web search')+' · link not independently verified'
-    checked.append((score,j,matches));used.add(j.get('url'))
+    if job.get('url') in used:continue
+    job=dict(job)
+    job['source']=str(job.get('source') or 'OpenAI web search')+' · link not independently verified'
+    checked.append((score,job,evidence));used.add(job.get('url'))
   if not checked:
-   with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=?',(uid,today()))
-   return None,'No sourced vacancies found today. Your Run was not used. Try a broader Purpose or another location.',422
+   with conn() as c:c.execute("DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state='working'",(uid,today()))
+   return None,'No closely related roles passed the CV match check. Your daily Run was not used. Try again later or adjust your location.',422
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
-   for k,(score,j,matches) in enumerate(checked):
-    c.execute("""INSERT INTO jobs(user_id,external_id,title,company,city,country,description,url,source,published,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,external_id) DO UPDATE SET description=excluded.description,url=excluded.url,published=excluded.published""",(uid,j['external_id'],j['title'][:240],j['company'][:200],j['city'][:230],j['country'][:100],j['description'][:14000],j['url'][:1400],j['source'],str(j['published']),now()))
+   for position,(score,j,evidence) in enumerate(checked[:5],1):
+    c.execute("""INSERT INTO jobs(user_id,external_id,title,company,city,country,description,url,source,published,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,external_id) DO UPDATE SET description=excluded.description,url=excluded.url,published=excluded.published,source=excluded.source""",(uid,j['external_id'],j['title'][:240],j['company'][:200],j['city'][:230],j['country'][:100],j['description'][:14000],j['url'][:1400],j['source'],str(j['published']),now()))
     job=c.execute('SELECT id FROM jobs WHERE user_id=? AND external_id=?',(uid,j['external_id'])).fetchone()
-    c.execute('INSERT INTO run_jobs(run_id,job_id,position,fit,matched_terms) VALUES(?,?,?,?,?)',(run['id'],job['id'],k+1,score,json.dumps(matches)))
+    c.execute('INSERT INTO run_jobs(run_id,job_id,position,fit,matched_terms) VALUES(?,?,?,?,?)',(run['id'],job['id'],position,score,json.dumps(evidence)))
    c.execute("UPDATE daily_runs SET state='complete' WHERE id=?",(run['id'],))
-  return len(checked),None,200
+  return len(checked[:5]),None,200
  except Exception as e:
-  with conn() as c:c.execute('DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state=?',(uid,today(),'working'))
-  app.logger.exception('Job search failed: %s',type(e).__name__)
-  return None,'Job search is temporarily unavailable. Check OpenAI billing and Railway logs, then retry.',502
+  with conn() as c:c.execute("DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state='working'",(uid,today()))
+  app.logger.exception('CV-first job search failed: %s',type(e).__name__)
+  return None,'Job search is temporarily unavailable. Check OpenAI usage and Railway logs, then retry.',502
 
 @app.get('/')
 def index():return render_template('index.html')
@@ -401,6 +423,16 @@ def run_jobs():
  count,error,status=run_search(session['uid'])
  if error:return jsonify(error=error),status
  return jsonify(ok=True,count=count)
+
+@app.post('/api/jobs/reset')
+@auth_required
+def reset_my_matches():
+ """Clear only the signed-in person's Run/History. Preserve their MyJobs."""
+ uid=session['uid']
+ with conn() as c:
+  c.execute('DELETE FROM daily_runs WHERE user_id=?',(uid,))
+  c.execute('DELETE FROM jobs WHERE user_id=? AND id NOT IN (SELECT job_id FROM watchlist WHERE user_id=?)',(uid,uid))
+ return jsonify(ok=True,message='Previous runs cleared; saved MyJobs preserved.')
 
 @app.get('/api/history')
 @auth_required
