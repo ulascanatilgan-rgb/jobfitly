@@ -15,6 +15,14 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from pathlib import Path as FontPath
+import reportlab
+_FONTDIR=FontPath(reportlab.__file__).resolve().parent / "fonts"
+for _font, _file in (("CVUnicode", "Vera.ttf"), ("CVUnicodeBold", "VeraBd.ttf")):
+    if _font not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(_font,str(_FONTDIR / _file)))
 
 W,H=A4
 NAVY=colors.HexColor("#293D50")
@@ -47,7 +55,7 @@ def _cut(value,font,size,width):
 
 def _para(text,fs=8.5,leading=12.2,bold=False,color=INK):
     return Paragraph(html.escape(_plain(text)).replace("\n","<br/>"),
-      ParagraphStyle("jobfitlycv",fontName="Helvetica-Bold" if bold else "Helvetica",
+      ParagraphStyle("jobfitlycv",fontName="CVUnicodeBold" if bold else "CVUnicode",
         fontSize=fs,leading=leading,textColor=color,spaceAfter=0,allowWidows=0,allowOrphans=0))
 
 def _sections(cv_text,name):
@@ -133,8 +141,8 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
             if title:
                 side_y-=7
                 if side_y<75:break
-                c.setFillColor(colors.HexColor("#E5EDF2"));c.setFont("Helvetica-Bold",8)
-                c.drawString(24,side_y,_cut(title,"Helvetica-Bold",8,PANEL-47))
+                c.setFillColor(colors.HexColor("#E5EDF2"));c.setFont("CVUnicodeBold",8)
+                c.drawString(24,side_y,_cut(title,"CVUnicodeBold",8,PANEL-47))
                 side_y-=17
             for line in values:
                 p=_para(line,7.7,10.4,color=WHITE)
@@ -144,18 +152,18 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
                 p.drawOn(c,24,side_y-height)
                 side_y-=height+7
             side_y-=15
-        c.setFillColor(MUTED);c.setFont("Helvetica",8)
+        c.setFillColor(MUTED);c.setFont("CVUnicode",8)
         c.drawRightString(W-42,H-30,date)
-        c.setFillColor(INK);c.setFont("Helvetica-Bold",20)
-        c.drawString(X,H-49,_cut(name,"Helvetica-Bold",20,RIGHT))
-        c.setFillColor(MUTED);c.setFont("Helvetica",9)
-        c.drawString(X,H-66,_cut(role,"Helvetica",9,RIGHT))
-        c.setFillColor(BURGUNDY);c.setFont("Helvetica",8)
-        c.drawString(X,H-81,_cut(company,"Helvetica",8,RIGHT))
+        c.setFillColor(INK);c.setFont("CVUnicodeBold",20)
+        c.drawString(X,H-49,_cut(name,"CVUnicodeBold",20,RIGHT))
+        c.setFillColor(MUTED);c.setFont("CVUnicode",9)
+        c.drawString(X,H-66,_cut(role,"CVUnicode",9,RIGHT))
+        c.setFillColor(BURGUNDY);c.setFont("CVUnicode",8)
+        c.drawString(X,H-81,_cut(company,"CVUnicode",8,RIGHT))
         c.setStrokeColor(RULE);c.setLineWidth(.75)
         c.line(X,H-91,W-42,H-91)
         c.line(X,47,W-42,47)
-        c.setFillColor(MUTED);c.setFont("Helvetica",7)
+        c.setFillColor(MUTED);c.setFont("CVUnicode",7)
         c.drawRightString(W-42,33,str(page))
         return H-113
 
@@ -173,13 +181,13 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
             if first:
                 if y-(18+ph+row_gap)<62:
                     c.showPage();y=paint_page()
-                c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.2)
-                c.drawString(X,y,_cut(section,"Helvetica-Bold",9.2,RIGHT))
+                c.setFillColor(BURGUNDY);c.setFont("CVUnicodeBold",9.2)
+                c.drawString(X,y,_cut(section,"CVUnicodeBold",9.2,RIGHT))
                 y-=18;first=False
             if y-ph-row_gap<62:
                 c.showPage();y=paint_page()
-                c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.2)
-                c.drawString(X,y,_cut(section+" (continued)","Helvetica-Bold",9.2,RIGHT))
+                c.setFillColor(BURGUNDY);c.setFont("CVUnicodeBold",9.2)
+                c.drawString(X,y,_cut(section+" (continued)","CVUnicodeBold",9.2,RIGHT))
                 y-=19
             if ph>y-61:
                 # Split unusual large paragraphs into smaller source-preserving blocks.
