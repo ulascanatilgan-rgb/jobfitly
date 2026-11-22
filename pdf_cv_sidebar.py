@@ -82,6 +82,25 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
     languages=sections.pop("LANGUAGES",[])
     if not sections:sections={"PROFILE":[_plain(cv_text)]}
     section_items=list(sections.items())
+    # Keep concise role-specific CVs on one A4 page wherever they fit.
+    # Text is never clipped: unusually long histories continue in the same design.
+    scales=((8.5,12.1,4.4,9),(8.2,11.5,3.4,7),(7.9,10.8,3,6),(7.6,10.3,2.6,5))
+    chosen=scales[-1]
+    for scale in scales:
+        trial_fs,trial_leading,trial_gap,trial_section_gap=scale
+        height=0
+        for heading,lines in section_items:
+            height+=18+trial_section_gap
+            for line in lines:
+                cleaned=re.sub(r"^[•*\-]\s+","",line).strip()
+                bold=not line.startswith(("-", "•", "*")) and (" | " in cleaned or " — " in cleaned)
+                para=_para(cleaned,trial_fs,trial_leading,bold=bold)
+                _,used=para.wrap(RIGHT,750)
+                height+=used+trial_gap
+        if height<=H-113-62:
+            chosen=scale
+            break
+    fs,leading,row_gap,section_gap=chosen
     info=[
       details.get("location") or city,
       details.get("email") or email,
@@ -127,8 +146,8 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
             side_y-=15
         c.setFillColor(MUTED);c.setFont("Helvetica",8)
         c.drawRightString(W-42,H-30,date)
-        c.setFillColor(INK);c.setFont("Helvetica-Bold",17)
-        c.drawString(X,H-49,_cut(name,"Helvetica-Bold",17,RIGHT))
+        c.setFillColor(INK);c.setFont("Helvetica-Bold",20)
+        c.drawString(X,H-49,_cut(name,"Helvetica-Bold",20,RIGHT))
         c.setFillColor(MUTED);c.setFont("Helvetica",9)
         c.drawString(X,H-66,_cut(role,"Helvetica",9,RIGHT))
         c.setFillColor(BURGUNDY);c.setFont("Helvetica",8)
@@ -149,16 +168,15 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
             if is_bullet:cleaned="•  "+cleaned
             job_line=(not is_bullet and ((" | " in cleaned or " — " in cleaned or " – " in cleaned)
                 and len(cleaned)<120))
-            fs=8.5;leading=12.1
             para=_para(cleaned,fs,leading,bold=job_line)
             _,ph=para.wrap(RIGHT,750)
             if first:
-                if y-(18+ph+5)<62:
+                if y-(18+ph+row_gap)<62:
                     c.showPage();y=paint_page()
                 c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.2)
                 c.drawString(X,y,_cut(section,"Helvetica-Bold",9.2,RIGHT))
                 y-=18;first=False
-            if y-ph-5<62:
+            if y-ph-row_gap<62:
                 c.showPage();y=paint_page()
                 c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.2)
                 c.drawString(X,y,_cut(section+" (continued)","Helvetica-Bold",9.2,RIGHT))
@@ -176,12 +194,12 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
                 if part:lines.append(part)
                 for segment in lines:
                     q=_para(segment,fs,leading,bold=job_line);_,qh=q.wrap(RIGHT,750)
-                    if y-qh-6<62:
+                    if y-qh-row_gap<62:
                         c.showPage();y=paint_page()
-                    q.drawOn(c,X,y-qh);y-=qh+5
+                    q.drawOn(c,X,y-qh);y-=qh+row_gap
             else:
                 para.drawOn(c,X,y-ph)
-                y-=ph+5
-        y-=10
+                y-=ph+row_gap
+        y-=section_gap
     c.showPage();c.save()
     return buf.getvalue()
