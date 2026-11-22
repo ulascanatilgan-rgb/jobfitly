@@ -245,37 +245,52 @@ def _check_live(job):
   return good
  except requests.RequestException:return False
 
-def fetch_candidates(profile):
- """Progressively widen OpenAI discovery while keeping cited source URLs.
+def _related_role_focus(cv_text):
+ """Develop adjacent role phrases only when the CV explicitly supports them."""
+ cv=str(cv_text or '').lower()
+ categories=(
+   (('audit','auditor','controls','internal control'), 'internal audit, governance, internal controls, compliance operations'),
+   (('risk','security','iam','cybersecurity'), 'technology risk, security governance, access management, risk operations'),
+   (('payment','fintech','banking','financial services'), 'banking operations, payments operations, financial services, investment operations'),
+   (('project','stakeholder','programme','program'), 'project coordination, programme operations, PMO, change management'),
+   (('customer','client','relationship','account manager'), 'client operations, customer success, relationship management'),
+   (('product','business analyst','strategy'), 'product operations, business operations, strategy execution'),
+   (('marketing','campaign','sales'), 'commercial operations, account management, marketing operations'),
+   (('software','developer','engineering'), 'software engineering, technical project management'),
+   (('healthcare','clinical','medical'), 'healthcare operations, clinical coordination'),
+ )
+ return [focus for keywords,focus in categories if any(re.search(r'\b'+re.escape(w)+r'\b',cv) for w in keywords)][:4]
 
- Prefer fresh local jobs, then country-wide/nearby/remote opportunities. An
- undated posting is labelled as unverified rather than given a fictitious date.
- """
- source_sets=[]
+def fetch_candidates(profile):
+ """Expand across source-backed role families with no invented vacancies."""
  original=dict(profile)
- variants=[(original,14)]
- broader=dict(original);broader['city']='';variants.append((broader,30))
- role=str((original.get('swipes') or {}).get('role_type') or '').strip()
- fallback=dict(original);fallback['city']='';fallback['keywords']=(' '.join([str(original.get('keywords') or ''),role])).strip()[:220]
- variants.append((fallback,30))
+ cv=original.get('cv_for_matching') or original.get('cv_text_preview') or ''
+ topics=_related_role_focus(cv)
+ keywords=str(original.get('keywords') or '').strip()
+ variants=[(dict(original,search_focus=keywords),14)]
+ variants.append((dict(original,city='',search_focus='; '.join(topics) or keywords),30))
+ if topics:
+  for topic in topics[:2]:
+   variants.append((dict(original,city='',search_focus=topic),30))
+ if len(variants)<4:
+  variants.append((dict(original,city='',search_focus='adjacent roles directly supported by the uploaded CV'),30))
  seen={};errors=[]
- for variant,age in variants:
+ for variant,age in variants[:5]:
   try:matches=search_jobs(variant,age)
   except (requests.RequestException,ValueError) as e:
    errors.append(type(e).__name__);continue
-  for j in matches:
-   if not j.get('title') or not j.get('company') or not _valid_public_link(j.get('url','')):continue
-   if j.get('published') and not _recent(j['published']):continue
-   # Country is a hard requirement unless the role explicitly offers remote work.
+  for job in matches:
+   if not job.get('title') or not job.get('company') or not _valid_public_link(job.get('url','')):continue
+   if job.get('published') and not _recent(job['published']):continue
    country=str(original.get('country') or '').strip().lower()
-   listed_country=str(j.get('country') or '').strip().lower()
-   title_and_description=(str(j.get('title') or '')+' '+str(j.get('description') or '')).lower()
-   remote=any(word in title_and_description for word in ('remote anywhere','remote europe','worldwide remote'))
+   listed_country=str(job.get('country') or '').strip().lower()
+   txt=(str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
+   remote=any(w in txt for w in ('remote anywhere','remote europe','worldwide remote'))
    if country and listed_country and country not in listed_country and not remote:continue
-   if not j.get('published'):j['source']='OpenAI web search · date unverified'
-   key=j['url'].split('?')[0].rstrip('/').lower()
-   if key not in seen:seen[key]=j
-  if len([job for job in seen.values() if lexical_fit(job, original.get('cv_for_matching') or original.get('cv_text_preview'))[0] >= 60]) >= 10:break
+   if not job.get('published'):job['source']='OpenAI web search · date unverified'
+   key=job['url'].split('?')[0].rstrip('/').lower()
+   if key not in seen:seen[key]=job
+  if sum(1 for job in seen.values() if lexical_fit(job,cv)[0]>=56)>=22:break
  return list(seen.values()),errors
 
 def get_run(uid,date=None):
@@ -307,17 +322,19 @@ def run_search(uid):
   candidates=[]
   for j in raw:
    cv_fit,evidence=lexical_fit(j,p['cv_for_matching'])
-   if cv_fit<60 or not specialty_fit(j.get('title'),p['cv_for_matching']):continue
+   if cv_fit<56 or not specialty_fit(j.get('title'),p['cv_for_matching']):continue
    candidates.append((j,cv_fit,evidence))
   # Semantic validation checks requirements vs. real CV, not aspirations.
-  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:35]])
+  candidates.sort(key=lambda entry:entry[1],reverse=True)
+  candidates=candidates[:35]
+  ai=ai_cv_fit(p,[entry[0] for entry in candidates])
   ranked=[]
   for idx,(j,cv_fit,evidence) in enumerate(candidates):
    if ai:
     assessment=ai.get(idx)
     if not assessment:continue
     semantic=assessment['cv_fit']
-    if semantic<60:continue
+    if semantic<55:continue
     cv_score=0.8*semantic+0.2*cv_fit
    else:
     cv_score=cv_fit
@@ -325,8 +342,8 @@ def run_search(uid):
    # CV fit determines 90% of match rating. Preferences are secondary.
    pref_score=score_job(j,p)[0]
    final=round(max(1,min(9.6,0.9*(cv_score/10)+0.1*pref_score)),1)
-   if final<5.9:continue
-   ranked.append((final,j,evidence))
+   if final<5.4:continue
+   ranked.append((final,j,[assessment['evidence']] if ai and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
   shortlist=ranked[:35]
   checked=[]
