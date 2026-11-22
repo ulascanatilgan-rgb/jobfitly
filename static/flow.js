@@ -11,7 +11,7 @@
     var p=state.me && state.me.profile || {};
     if(id==="cv" && p.has_cv)return "Ready";
     if(id==="skills" && Object.keys(p.questions||{}).length>=20)return "Ready";
-    if(id==="search" && p.city && p.country && Object.keys(p.swipes||{}).length)return "Ready";
+    if(id==="search")return "Ready";
     if(id==="results" && state.has_run)return (state.jobs.length+" matches");
     if(id==="watch" && state.watch.length)return (state.watch.length+" saved");
     return "";
@@ -35,21 +35,20 @@
   };
   window.renderFlowResults=function(){
     var p=state.me && state.me.profile || {};
-    var ready=!!(p.has_cv && Object.keys(p.questions||{}).length>=15 &&
-      Object.keys(p.swipes||{}).length && p.city && p.country);
+    var ready=!!p.has_cv;
     var status=state.has_run
       ?'<div class="flow-result-status"><span>'+state.jobs.length+' roles from your search</span>' +
        '<button type="button" onclick="resetMyMatches()">Clear and search again ↺</button></div>'
       :'<div class="flow-result-start"><p>Your CV leads the matching. Preferences refine the selection.</p>' +
        '<button class="btn btn-dark flow-run" id="run-button" onclick="reloadJobs()" ' +
        (ready?'':'disabled')+'>Let’s find ↗</button>' +
-       (ready?'':'<p class="flow-muted">Complete steps 1–3 to start.</p>')+'</div>';
+       (ready?'':'<p class="flow-muted">Upload a CV to begin. Your preferences are optional.</p>')+'</div>';
     var jobs=state.jobs.length
        ?'<div class="jobs-grid flow-results-grid">'+state.jobs.slice().sort(function(a,b){return Number(b.score||0)-Number(a.score||0)}).map(function(j,i){return jobCard(j,i)}).join("")+'</div>'
-       :(state.has_run?'<p class="flow-muted">No suitable jobs in this run.</p>':'');
+       :(state.has_run?'<p class="flow-muted">No sourced vacancies available for this search.</p>':'');
     $("main-panel").innerHTML='<div class="page-kicker">STEP 04</div>' +
       '<h1 class="page-heading">Let’s find<span class="accent">.</span></h1>' +
-      '<p class="page-subheading">Up to five relevant jobs. No random listings.</p>' +
+      '<p class="page-subheading">Your best available CV matches, highest fit first.</p>' +
       status+jobs+'<p class="flow-verification">Confirm each vacancy on the employer’s website before applying.</p>';
   };
   var oldCV=renderCV,oldSkills=renderSkills,oldSearch=renderSearch,
