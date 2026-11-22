@@ -291,6 +291,18 @@ def _related_role_focus(cv_text):
 def fetch_candidates(profile):
  """Progressive source-grounded vacancy search. Blank preferences are neutral."""
  original=dict(profile)
+ # When a new user leaves geography empty, use only explicit location from the CV.
+ # Never mistake the signup form's sample placeholders for user preferences.
+ place=str((original.get('cv_details') or {}).get('location') or '')
+ if not str(original.get('country') or '').strip() and place:
+  named_country=re.search(r'\b(Belgium|Netherlands|France|Germany|Italy|Spain|Portugal|'
+                          r'Luxembourg|Switzerland|Ireland|Turkey|Türkiye|Canada|'
+                          r'United Kingdom|United States)\b',place,re.I)
+  if named_country:
+   original['country']=named_country.group(0)
+   if not str(original.get('city') or '').strip():
+    city=place[:named_country.start()].strip(' ,|-')
+    if 2<len(city)<85:original['city']=city
  cv=original.get('cv_for_matching') or original.get('cv_text_preview') or ''
  topics=_related_role_focus(cv)
  keywords=str(original.get('keywords') or '').strip()
@@ -439,7 +451,7 @@ def register():
  try:
   with conn() as c:
    cur=c.execute('INSERT INTO users(email,password_hash,created_at) VALUES(?,?,?)',(email,generate_password_hash(password),now())); uid=cur.lastrowid
-   c.execute('INSERT INTO profiles(user_id,updated_at) VALUES(?,?)',(uid,now()))
+   c.execute('INSERT INTO profiles(user_id,country,city,updated_at) VALUES(?,?,?,?)',(uid,'','',now()))
   session.clear();session.permanent=d.get('remember') is True;session['uid']=uid;return jsonify(ok=True,email=email,csrf=csrf_token())
  except sqlite3.IntegrityError:return jsonify(error='This email is already registered.'),409
 @app.post('/api/login')
