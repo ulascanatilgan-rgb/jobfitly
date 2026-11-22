@@ -85,7 +85,7 @@
   };
   reloadJobs=async function(){
     var btn=$("run-button");
-    if(btn){btn.disabled=true;btn.textContent="Matching your CV…";}
+    if(btn){btn.disabled=true;btn.setAttribute("aria-busy","true");btn.innerHTML='<span class="live-search-spinner" aria-hidden="true"></span> Searching live vacancies…';}
     try{
       var result=await api("/api/jobs/run",{method:"POST"});
       await loadContent();navigate("results");

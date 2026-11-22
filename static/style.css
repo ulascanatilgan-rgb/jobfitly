@@ -477,3 +477,8 @@ body{font-size:13px}
  .landing-clean .hero-clean-inner h1.reveal-intro{animation:none!important;opacity:1!important;filter:none!important;transform:none!important}
  .kit-hourglass,.kit-hourglass-sand-top,.kit-hourglass-sand-bottom,.kit-hourglass-stream{animation:none!important}
 }
+
+/* Quiet live-job search activity indicator. */
+.live-search-spinner{display:inline-block;width:13px;height:13px;vertical-align:-2px;margin-right:8px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:live-search-turn .85s linear infinite}
+@keyframes live-search-turn{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.live-search-spinner{animation:none;border-top-color:#850d45}}
