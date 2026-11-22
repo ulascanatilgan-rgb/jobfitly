@@ -1,11 +1,13 @@
-"""JobFitly's established one-page CV aesthetic: navy information panel, white career column.
+"""JobFitly's established polished navy-sidebar CV template.
 
-This template works from text-only uploads. It cannot reproduce a photograph
-embedded in a discarded source PDF; the original uploaded CV is not retained.
+A source-CV identity panel + clean career narrative; no generic CONTACT heading,
+no fabricated personal facts and no layout switching when content spans pages.
 """
+import datetime
 import html
 import io
 import re
+from zoneinfo import ZoneInfo
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -17,161 +19,169 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 W,H=A4
 NAVY=colors.HexColor("#293D50")
 INK=colors.HexColor("#151515")
-MUTED=colors.HexColor("#626262")
+MUTED=colors.HexColor("#656565")
 BURGUNDY=colors.HexColor("#850D45")
 WHITE=colors.white
-LINE=colors.HexColor("#D8DADD")
+RULE=colors.HexColor("#D8DADD")
 PANEL=174
-RIGHT_X=195
-RIGHT_W=W-RIGHT_X-42
-
+X=195
+RIGHT=W-X-42
 SECTIONS={
-    "PROFILE":"PROFILE",
-    "PROFESSIONAL SUMMARY":"PROFILE",
-    "SUMMARY":"PROFILE",
-    "EXPERIENCE":"PROFESSIONAL EXPERIENCE",
-    "WORK EXPERIENCE":"PROFESSIONAL EXPERIENCE",
-    "PROFESSIONAL EXPERIENCE":"PROFESSIONAL EXPERIENCE",
-    "CAREER HISTORY":"PROFESSIONAL EXPERIENCE",
-    "PROJECTS":"PROJECTS",
-    "FINANCIAL MARKETS & PERSONAL PROJECTS":"PROJECTS",
-    "FINANCIAL MARKETS AND PERSONAL PROJECTS":"PROJECTS",
-    "EDUCATION":"EDUCATION",
-    "CERTIFICATIONS":"CERTIFICATIONS",
-    "CERTIFICATES":"CERTIFICATIONS",
-    "SKILLS":"SKILLS",
-    "KEY SKILLS":"SKILLS",
-    "CORE SKILLS":"SKILLS",
-    "LANGUAGES":"LANGUAGES",
+ "PROFILE":"PROFILE","SUMMARY":"PROFILE","PROFESSIONAL SUMMARY":"PROFILE",
+ "EXPERIENCE":"PROFESSIONAL EXPERIENCE","WORK EXPERIENCE":"PROFESSIONAL EXPERIENCE",
+ "PROFESSIONAL EXPERIENCE":"PROFESSIONAL EXPERIENCE","CAREER HISTORY":"PROFESSIONAL EXPERIENCE",
+ "RELEVANT EXPERIENCE":"PROFESSIONAL EXPERIENCE",
+ "PROJECTS":"PROJECTS","EDUCATION":"EDUCATION","CERTIFICATIONS":"CERTIFICATIONS",
+ "CERTIFICATES":"CERTIFICATIONS","QUALIFICATIONS":"CERTIFICATIONS",
+ "SKILLS":"SKILLS","KEY SKILLS":"SKILLS","CORE SKILLS":"SKILLS",
+ "LANGUAGES":"LANGUAGES","ADDITIONAL INFORMATION":"ADDITIONAL INFORMATION",
+ "ACHIEVEMENTS":"ACHIEVEMENTS"
 }
 
-def _plain(value):
-    return str(value or "").strip()
+def _plain(value):return str(value or "").strip()
+def _cut(value,font,size,width):
+    txt=_plain(value)
+    if stringWidth(txt,font,size)<=width:return txt
+    while txt and stringWidth(txt+"…",font,size)>width:txt=txt[:-1]
+    return txt.rstrip()+"…"
 
-def _fit_text(value,font,size,width):
-    value=_plain(value)
-    if stringWidth(value,font,size)<=width:return value
-    while value and stringWidth(value+'...',font,size)>width:value=value[:-1]
-    return value.rstrip()+'...'
+def _para(text,fs=8.5,leading=12.2,bold=False,color=INK):
+    return Paragraph(html.escape(_plain(text)).replace("\n","<br/>"),
+      ParagraphStyle("jobfitlycv",fontName="Helvetica-Bold" if bold else "Helvetica",
+        fontSize=fs,leading=leading,textColor=color,spaceAfter=0,allowWidows=0,allowOrphans=0))
 
-def _p(value,size,leading,bold=False,color=INK):
-    return Paragraph(html.escape(_plain(value)),ParagraphStyle(
-        "cv-panel",fontName="Helvetica-Bold" if bold else "Helvetica",
-        fontSize=size,leading=leading,textColor=color
-    ))
-
-def _sections(text,name):
-    result={"PROFILE":[]};current="PROFILE"
-    lines=_plain(text).replace("\r\n","\n").split("\n")
-    for index,line in enumerate(lines):
+def _sections(cv_text,name):
+    out={};section="PROFILE"
+    raw=_plain(cv_text).replace("\r\n","\n")
+    for line in raw.splitlines():
         line=line.strip()
         if not line:continue
-        if index<=2 and line.casefold()==_plain(name).casefold():continue
-        if line.casefold().startswith(("target role:","application:","tailored cv","curriculum vitae")):continue
-        head=line.rstrip(":").strip().upper()
-        if head in SECTIONS:
-            current=SECTIONS[head]
-            result.setdefault(current,[])
-        else:
-            result.setdefault(current,[]).append(line)
-    # A section header must not be rendered without content.
-    return {key:value for key,value in result.items() if value}
+        if line.casefold()==name.casefold():continue
+        lower=line.casefold()
+        if lower.startswith(("target role:","application:","tailored cv","curriculum vitae","candidate name:")):continue
+        if lower.startswith(("contact:","email:","e-mail:","phone:","mobile:","address:","linkedin:","website:")):continue
+        heading=line.rstrip(":").strip().upper()
+        if heading in SECTIONS:
+            section=SECTIONS[heading]
+            out.setdefault(section,[])
+        elif heading in ("CONTACT","PERSONAL DETAILS"):
+            section="IGNORED_PERSONAL_DETAILS"
+        elif section!="IGNORED_PERSONAL_DETAILS":
+            out.setdefault(section,[]).append(line)
+    return {k:v for k,v in out.items() if v}
 
-
-def _line_style(line,body_size,leading):
-    trimmed=line.strip()
-    bullet=bool(re.match(r"^[•*\-]\s*",trimmed))
-    text=re.sub(r"^[•*\-]\s*","",trimmed) if bullet else trimmed
-    if bullet:text="•  "+text
-    # Recognize concise employer/role lines without claiming unverifiable new facts.
-    job_line=not bullet and ((" | " in text or " — " in text or " – " in text) and len(text)<125)
-    return _p(text,body_size,leading,bold=job_line)
-
-
-def tailored_cv_pdf(name,role,company,cv_text,city="",email=""):
-    """Render user's known navy-sidebar style as a single, clean A4 PDF."""
-    name=_plain(name) or "Applicant"
-    data=_sections(cv_text,name)
-    def group(key):
-        return data.pop(key,[])
-    profile=group("PROFILE")
-    skills=group("SKILLS")
-    languages=group("LANGUAGES")
-    # Professional experience, education, etc. retain the order written by AI.
-    if profile:data={"PROFILE":profile,**data}
-    elif not data:data={"PROFILE":[cv_text]}
-    right_sections=list(data.items())
-    fontsize_choices=[(8.6,12.3,10),(8.2,11.7,8),(7.8,11.1,7),(7.5,10.5,6)]
-    fit=None
-    for fs,leading,gap in fontsize_choices:
-        prepared=[];total=0
-        for section,lines in right_sections:
-            rows=[]
-            for line in lines:
-                p=_line_style(line,fs,leading)
-                _,height=p.wrap(RIGHT_W,600)
-                rows.append((p,height))
-            h=16+sum(height+3 for _,height in rows)+gap
-            total+=h
-            prepared.append((section,rows,h))
-        if total<=H-161:
-            fit=(fs,leading,gap,prepared)
-            break
-    if fit is None:
-        raise ValueError("CV text is too long for an accessible one-page layout.")
-    fs,leading,gap,prepared=fit
+def tailored_cv_pdf(name,role,company,cv_text,city="",email="",details=None):
+    """Generate the original navy/white one-page layout; continue the SAME design if needed."""
+    details=dict(details or {})
+    name=_plain(details.get("name") or name) or "Applicant"
+    role=_plain(role)
+    company=_plain(company)
+    date=datetime.datetime.now(ZoneInfo("Europe/Brussels")).strftime("%d %B %Y")
+    sections=_sections(cv_text,name)
+    skills=sections.pop("SKILLS",[])
+    languages=sections.pop("LANGUAGES",[])
+    if not sections:sections={"PROFILE":[_plain(cv_text)]}
+    section_items=list(sections.items())
+    info=[
+      details.get("location") or city,
+      details.get("email") or email,
+      details.get("phone"),
+      details.get("linkedin"),
+      details.get("website"),
+      details.get("nationality")
+    ]
+    info=[_plain(x) for x in info if _plain(x)]
+    def side_groups():
+        groups=[]
+        if info:groups.append(("",info))
+        if skills:groups.append(("SKILLS",skills))
+        if languages or details.get("languages"):
+            groups.append(("LANGUAGES",languages or [details["languages"]]))
+        return groups
     buf=io.BytesIO()
     c=canvas.Canvas(buf,pagesize=A4,pageCompression=1)
     c.setTitle(f"CV | {name} | {role}")
     c.setAuthor(name)
-    # Fixed left information panel.
-    c.setFillColor(NAVY);c.rect(0,0,PANEL,H,stroke=0,fill=1)
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold",9.5)
-    c.drawString(24,H-48,"PROFILE")
-    c.setStrokeColor(colors.HexColor("#748594"));c.setLineWidth(.7)
-    c.line(24,H-61,PANEL-24,H-61)
-    side_y=H-81
-    def sidebar(title,lines):
-        nonlocal side_y
-        if not lines:return
-        side_y-=12
-        c.setFillColor(colors.HexColor("#DDE7EE"))
-        c.setFont("Helvetica-Bold",8.1)
-        c.drawString(24,side_y,title)
-        side_y-=12
-        for line in lines:
-            p=_p(line,8,11,color=WHITE)
-            _,h=p.wrap(PANEL-47,350)
-            p.drawOn(c,24,side_y-h)
-            side_y-=h+7
-        side_y-=14
-    sidebar("CONTACT",[x for x in (_plain(email),_plain(city)) if x])
-    sidebar("SKILLS",skills)
-    sidebar("LANGUAGES",languages)
-    if side_y<38:
-        raise ValueError("CV sidebar is too long for the one-page layout.")
-    # Right career column.
-    c.setFillColor(INK);c.setFont("Helvetica-Bold",18)
-    c.drawString(RIGHT_X,H-45,_fit_text(name,"Helvetica-Bold",18,RIGHT_W))
-    c.setFillColor(MUTED);c.setFont("Helvetica",9)
-    c.drawString(RIGHT_X,H-61,_fit_text(role,"Helvetica",9,RIGHT_W))
-    c.setFillColor(BURGUNDY);c.setFont("Helvetica",8)
-    c.drawString(RIGHT_X,H-76,_fit_text("Application to "+_plain(company),"Helvetica",8,RIGHT_W))
-    c.setStrokeColor(LINE);c.setLineWidth(.8)
-    c.line(RIGHT_X,H-90,W-42,H-90)
-    y=H-110
-    for section,rows,_ in prepared:
-        c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.1)
-        c.drawString(RIGHT_X,y,section[:55])
-        y-=16
-        for p,h in rows:
-            p.drawOn(c,RIGHT_X,y-h)
-            y-=h+3
-        y-=gap
-    c.setStrokeColor(LINE)
-    c.line(RIGHT_X,45,W-42,45)
-    c.setFillColor(MUTED);c.setFont("Helvetica",7.7)
-    c.drawString(RIGHT_X,32,"Application CV  |  Generated from the candidate's CV")
+    page=0
+    def paint_page():
+        nonlocal page
+        page+=1
+        c.setFillColor(NAVY);c.rect(0,0,PANEL,H,stroke=0,fill=1)
+        c.setStrokeColor(colors.HexColor("#718595"));c.setLineWidth(.65)
+        c.line(24,H-56,PANEL-24,H-56)
+        side_y=H-80
+        for title,values in side_groups():
+            if title:
+                side_y-=7
+                if side_y<75:break
+                c.setFillColor(colors.HexColor("#E5EDF2"));c.setFont("Helvetica-Bold",8)
+                c.drawString(24,side_y,_cut(title,"Helvetica-Bold",8,PANEL-47))
+                side_y-=17
+            for line in values:
+                p=_para(line,7.7,10.4,color=WHITE)
+                _,height=p.wrap(PANEL-48,500)
+                if side_y-height<65:
+                    break
+                p.drawOn(c,24,side_y-height)
+                side_y-=height+7
+            side_y-=15
+        c.setFillColor(MUTED);c.setFont("Helvetica",8)
+        c.drawRightString(W-42,H-30,date)
+        c.setFillColor(INK);c.setFont("Helvetica-Bold",17)
+        c.drawString(X,H-49,_cut(name,"Helvetica-Bold",17,RIGHT))
+        c.setFillColor(MUTED);c.setFont("Helvetica",9)
+        c.drawString(X,H-66,_cut(role,"Helvetica",9,RIGHT))
+        c.setFillColor(BURGUNDY);c.setFont("Helvetica",8)
+        c.drawString(X,H-81,_cut(company,"Helvetica",8,RIGHT))
+        c.setStrokeColor(RULE);c.setLineWidth(.75)
+        c.line(X,H-91,W-42,H-91)
+        c.line(X,47,W-42,47)
+        c.setFillColor(MUTED);c.setFont("Helvetica",7)
+        c.drawRightString(W-42,33,str(page))
+        return H-113
+
+    y=paint_page()
+    for section,rows in section_items:
+        first=True
+        for row in rows:
+            is_bullet=bool(re.match(r"^[•*\-]\s+",row))
+            cleaned=re.sub(r"^[•*\-]\s+","",row).strip()
+            if is_bullet:cleaned="•  "+cleaned
+            job_line=(not is_bullet and ((" | " in cleaned or " — " in cleaned or " – " in cleaned)
+                and len(cleaned)<120))
+            fs=8.5;leading=12.1
+            para=_para(cleaned,fs,leading,bold=job_line)
+            _,ph=para.wrap(RIGHT,750)
+            if first:
+                if y-(18+ph+5)<62:
+                    c.showPage();y=paint_page()
+                c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.2)
+                c.drawString(X,y,_cut(section,"Helvetica-Bold",9.2,RIGHT))
+                y-=18;first=False
+            if y-ph-5<62:
+                c.showPage();y=paint_page()
+                c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",9.2)
+                c.drawString(X,y,_cut(section+" (continued)","Helvetica-Bold",9.2,RIGHT))
+                y-=19
+            if ph>y-61:
+                # Split unusual large paragraphs into smaller source-preserving blocks.
+                words=cleaned.split()
+                lines=[];part=""
+                for word in words:
+                    candidate=(part+" "+word).strip()
+                    q=_para(candidate,fs,leading,bold=job_line);_,qh=q.wrap(RIGHT,750)
+                    if qh>180 and part:
+                        lines.append(part);part=word
+                    else:part=candidate
+                if part:lines.append(part)
+                for segment in lines:
+                    q=_para(segment,fs,leading,bold=job_line);_,qh=q.wrap(RIGHT,750)
+                    if y-qh-6<62:
+                        c.showPage();y=paint_page()
+                    q.drawOn(c,X,y-qh);y-=qh+5
+            else:
+                para.drawOn(c,X,y-ph)
+                y-=ph+5
+        y-=10
     c.showPage();c.save()
     return buf.getvalue()
