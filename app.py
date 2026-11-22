@@ -289,20 +289,28 @@ def _related_role_focus(cv_text):
  return [focus for keywords,focus in categories if any(re.search(r'\b'+re.escape(w)+r'\b',cv) for w in keywords)][:4]
 
 def fetch_candidates(profile):
- """Expand across source-backed role families with no invented vacancies."""
+ """Progressive source-grounded vacancy search. Blank preferences are neutral."""
  original=dict(profile)
  cv=original.get('cv_for_matching') or original.get('cv_text_preview') or ''
  topics=_related_role_focus(cv)
  keywords=str(original.get('keywords') or '').strip()
- variants=[(dict(original,search_focus=keywords),14)]
- variants.append((dict(original,city='',search_focus='; '.join(topics) or keywords),30))
- if topics:
-  for topic in topics[:2]:
-   variants.append((dict(original,city='',search_focus=topic),30))
- if len(variants)<4:
-  variants.append((dict(original,city='',search_focus='adjacent roles directly supported by the uploaded CV'),30))
+ focus='; '.join(topics)
+ variants=[
+  (dict(original,search_focus=keywords or focus,search_scope='local and nearby employers'),14),
+  (dict(original,city='',keywords='',search_focus=focus or 'work directly supported by the CV',
+        search_scope='all cities nationally, employer websites and ATS career boards'),30)
+ ]
+ for topic in topics[:3]:
+  variants.append((dict(original,city='',keywords='',search_focus=topic,
+                        search_scope='national, nearby and hybrid jobs with transferable duties'),30))
+ variants.extend([
+  (dict(original,city='',keywords='',search_focus=focus or 'adjacent jobs supported by the CV',
+        search_scope='remote opportunities available in the country or across Europe'),30),
+  (dict(original,city='',keywords='',search_focus='alternative job titles with similar daily duties',
+        search_scope='active current nationwide career openings'),30)
+ ])
  seen={};errors=[]
- for variant,age in variants[:5]:
+ for index,(variant,age) in enumerate(variants[:7]):
   try:matches=search_jobs(variant,age)
   except (requests.RequestException,ValueError) as e:
    errors.append(type(e).__name__);continue
@@ -310,14 +318,17 @@ def fetch_candidates(profile):
    if not job.get('title') or not job.get('company') or not _valid_public_link(job.get('url','')):continue
    if job.get('published') and not _recent(job['published']):continue
    country=str(original.get('country') or '').strip().lower()
-   listed_country=str(job.get('country') or '').strip().lower()
-   txt=(str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
-   remote=any(w in txt for w in ('remote anywhere','remote europe','worldwide remote'))
-   if country and listed_country and country not in listed_country and not remote:continue
-   if not job.get('published'):job['source']='OpenAI web search · date unverified'
+   listed=str(job.get('country') or '').strip().lower()
+   text=(str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
+   remote=any(w in text for w in ('remote anywhere','remote europe','worldwide remote',
+                                   'remote within europe','remote across europe','remote in eu'))
+   if country and listed and country not in listed and not remote:continue
    key=job['url'].split('?')[0].rstrip('/').lower()
    if key not in seen:seen[key]=job
-  if sum(1 for job in seen.values() if lexical_fit(job,cv)[0]>=56)>=22:break
+  # Retain a larger reserve in case some vacancies are closed or too specialized.
+  plausible=sum(1 for job in seen.values() if specialty_fit(job.get('title'),cv)
+                and lexical_fit(job,cv)[0]>=48)
+  if index>=1 and plausible>=16:break
  return list(seen.values()),errors
 
 def get_run(uid,date=None):
@@ -332,8 +343,8 @@ def get_run(uid,date=None):
 
 def run_search(uid):
  p=profile_for(uid)
- if not p.get('has_cv') or len(p.get('questions',{}))<15 or not p.get('swipes') or not p.get('country') or not p.get('city'):
-  return None,'Complete CV, Work Style and Purpose first.',400
+ if not p.get('has_cv'):
+  return None,'Upload a readable CV before searching.',400
  # Read the actual uploaded CV server-side. It must be the primary matching source.
  with conn() as c:
   row=c.execute('SELECT cv_text FROM profiles WHERE user_id=?',(uid,)).fetchone()
@@ -348,20 +359,25 @@ def run_search(uid):
   # A specialized job without corresponding real CV history never passes.
   candidates=[]
   for j in raw:
+   if not specialty_fit(j.get('title'),p['cv_for_matching']):continue
    cv_fit,evidence=lexical_fit(j,p['cv_for_matching'])
-   if cv_fit<56 or not specialty_fit(j.get('title'),p['cv_for_matching']):continue
+   if cv_fit<56:
+    # Keep genuinely adjacent roles when CV evidence matches their actual duties.
+    overlap=sorted(tokenize(j.get('description','')) & tokenize(p['cv_for_matching']))
+    if len(overlap)<3 and cv_fit==0:continue
+    cv_fit=max(cv_fit,min(52,27+3.5*len(overlap)))
+    evidence=evidence or overlap[:6]
    candidates.append((j,cv_fit,evidence))
   # Semantic validation checks requirements vs. real CV, not aspirations.
   candidates.sort(key=lambda entry:entry[1],reverse=True)
-  candidates=candidates[:35]
-  ai=ai_cv_fit(p,[entry[0] for entry in candidates])
+  candidates=candidates[:40]
+  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:35]])
   ranked=[]
   for idx,(j,cv_fit,evidence) in enumerate(candidates):
-   if ai:
-    assessment=ai.get(idx)
-    if not assessment:continue
+   assessment=ai.get(idx) if idx<35 else None
+   if assessment:
     semantic=assessment['cv_fit']
-    if semantic<55:continue
+    if semantic<25 and cv_fit<55:continue
     cv_score=0.8*semantic+0.2*cv_fit
    else:
     cv_score=cv_fit
@@ -369,10 +385,9 @@ def run_search(uid):
    # CV fit determines 90% of match rating. Preferences are secondary.
    pref_score=score_job(j,p)[0]
    final=round(max(1,min(9.6,0.9*(cv_score/10)+0.1*pref_score)),1)
-   if final<5.4:continue
-   ranked.append((final,j,[assessment['evidence']] if ai and assessment.get('evidence') else evidence))
+   ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
-  shortlist=ranked[:35]
+  shortlist=ranked[:40]
   checked=[]
   with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
    verified=list(pool.map(lambda entry:_check_live(entry[1]),shortlist))
@@ -390,7 +405,7 @@ def run_search(uid):
   checked.sort(key=lambda entry:entry[0],reverse=True)
   if not checked:
    with conn() as c:c.execute("DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state='working'",(uid,today()))
-   return None,'No closely related roles passed the CV match check. Your daily Run was not used. Try again later or adjust your location.',422
+   return None,'No source-backed vacancy was found right now. Your search was not used, so please retry.',422
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
    for position,(score,j,evidence) in enumerate(checked[:5],1):
