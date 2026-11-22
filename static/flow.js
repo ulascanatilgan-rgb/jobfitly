@@ -1,12 +1,11 @@
-/* JobFitly six-step interface. The existing API and application-kit actions remain. */
+/* JobFitly five-step interface; history lives under the personal profile. */
 (function () {
   var steps = [
-    {id:"cv",num:"01",title:"Upload your CV",desc:"Your career experience comes first."},
-    {id:"skills",num:"02",title:"Tell about yourself",desc:"20 short work-style questions."},
-    {id:"search",num:"03",title:"What you search",desc:"Location, sector and job direction."},
-    {id:"results",num:"04",title:"Let's find",desc:"Up to five roles that fit your CV."},
-    {id:"watch",num:"05",title:"Watchlist",desc:"Selected jobs, motivation and CV."},
-    {id:"history",num:"06",title:"History",desc:"Your previous searches and results."}
+    {id:"cv",num:"1",title:"Upload your CV",desc:"Your career experience comes first."},
+    {id:"skills",num:"2",title:"Tell about yourself",desc:"20 short work-style questions."},
+    {id:"search",num:"3",title:"What you search",desc:"Location, sector and job direction."},
+    {id:"results",num:"4",title:"Let's find",desc:"Up to five roles that fit your CV."},
+    {id:"watch",num:"5",title:"My jobs",desc:"Selected jobs, motivation and tailored CV."}
   ];
   function indicator(id) {
     var p=state.me && state.me.profile || {};
@@ -32,7 +31,7 @@
       '<div class="flow-home-intro"><div class="flow-home-overline">YOUR JOB SEARCH</div>' +
       '<h1>One step at a time<span>.</span></h1>' +
       '<p>Start with your CV. Move through each step when you are ready.</p></div>' +
-      '<div class="flow-steps" aria-label="Six steps to finding a job">'+html+'</div>';
+      '<div class="flow-steps" aria-label="Five steps to finding a job">'+html+'</div>';
   };
   window.renderFlowResults=function(){
     var p=state.me && state.me.profile || {};
@@ -57,11 +56,11 @@
       oldWatch=renderWatch,oldHistory=renderHistory,oldProfile=renderProfile;
   function watchTitle(){
     var heading=$("main-panel")&&$("main-panel").querySelector(".page-heading");
-    if(heading)heading.innerHTML='Watchlist<span class="accent">.</span>';
+    if(heading)heading.innerHTML='My jobs<span class="accent">.</span>';
   }
   function crumb(screen){
-    var names={cv:"01 / UPLOAD YOUR CV",skills:"02 / ABOUT YOU",search:"03 / YOUR SEARCH",
-      results:"04 / SEARCH",watch:"05 / WATCHLIST",history:"06 / HISTORY",profile:"YOUR PROFILE"};
+    var names={cv:"1 / UPLOAD YOUR CV",skills:"2 / ABOUT YOU",search:"3 / YOUR SEARCH",
+      results:"4 / LET’S FIND",watch:"5 / MY JOBS",history:"HISTORY",profile:"YOUR PROFILE"};
     if(!names[screen])return;
     var el=document.createElement("div");
     el.className="flow-detail-topline";

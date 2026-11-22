@@ -76,14 +76,14 @@ def test_tailored_cv_has_professional_header_and_original_evidence():
     assert "Financial controls" in text
 
 
-def test_six_step_page_and_original_portrait_file():
+def test_five_step_page_and_original_portrait_file():
     base=Path(__file__).resolve().parents[1]
     html=(base/"templates"/"index.html").read_text()
     js=(base/"static"/"flow.js").read_text()
     assert 'flow-app-header' in html
     assert 'executive-office-original.png' in html
     assert (base/"static"/"executive-office-original.png").is_file()
-    assert js.count('id:"')==6
+    assert js.count('id:"')==5
     for title in (
         "Upload your CV","Tell about yourself","What you search",
         "Let's find","Watchlist","History"

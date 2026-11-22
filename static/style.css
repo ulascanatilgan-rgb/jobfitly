@@ -416,3 +416,18 @@ body{font-size:13px}
  .hero-clean-inner .hero-pricing-tagline{font-size:9px}
  .landing-clean .landing-footer{padding-top:9px;padding-bottom:10px}
 }
+
+/* Five calm numbered steps and flexible source-CV profile. */
+.flow-app-footer{position:relative;display:grid;grid-template-columns:1fr auto;gap:3px 18px;align-items:center}
+.flow-app-footer .flow-profile{grid-column:1;grid-row:1;text-align:left}
+.flow-app-footer .flow-history{grid-column:1;grid-row:2;justify-self:start;border:0;background:none;color:#787177;padding:0 0 7px;font-size:10px;font-weight:600;cursor:pointer;text-align:left}
+.flow-app-footer .flow-logout{grid-column:2;grid-row:1 / 3;align-self:start}
+.flow-app-footer .flow-history:hover{color:#850d45}
+.profile-cv-facts{border-top:1px solid #ded9dc;padding:17px 0 16px}
+.profile-cv-facts h2{font-size:13px;font-weight:750;letter-spacing:-.025em;margin:0 0 13px}
+.profile-cv-facts p{font-size:11px;line-height:1.65;color:#5c555a;margin:0}
+.cv-fact{display:grid;grid-template-columns:minmax(80px,130px) 1fr;gap:13px;padding:6px 0;align-items:baseline}
+.cv-fact span{font-size:10px;color:#807981}
+.cv-fact strong{font-size:11px;color:#28242a;font-weight:550;overflow-wrap:anywhere}
+.profile-small-note{color:#868086;font-size:10px;line-height:1.6;margin:14px 0 20px}
+@media(max-width:790px){.flow-app-footer{gap:3px 12px}.cv-fact{grid-template-columns:88px minmax(0,1fr)}}
