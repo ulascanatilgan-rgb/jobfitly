@@ -516,10 +516,10 @@ def generate_ai(p,j):
  sys='''You are a premium, precise job-application writer. Return ONLY valid JSON with two string keys: motivation and cv.
 
 MOTIVATION STRING must be tailored to the actual employer and vacancy and grounded entirely in the provided original CV:
-- First: a brief original opening paragraph (about 45-70 words) explaining relevant experience and genuine interest. NO document title/date/recipient here; the PDF template adds those.
+- First: a succinct fluent opening paragraph of 35-50 words explaining relevant genuine interest. NO document title/date/recipient here; the PDF template adds those.
 - Then EXACTLY seven numbered points. Each heading MUST be a short complete sentence (e.g. "1. I have coordinated complex projects across teams.") followed by 1-2 short natural sentences linking CV-backed evidence to requirements. No keyword fragments, colon-separated phrases or telegraphic text.
 - Continue 2., 3., 4., 5., 6., 7. with no missing or repeated numbers. Each point must cover different, concrete role-specific evidence in fluent business English.
-- Total target 250-340 words, easy to read, professional business English, no exaggerated enthusiasm or invented achievements.
+- Total target 220-280 words, with seven short, complete-sentence headings and one concise evidence-rich supporting sentence per heading. Easy to read, professional business English, no exaggerated enthusiasm or invented achievements.
 - Do not fabricate employers, credentials, dates, quantitative results, duties, experience, or claims of hiring likelihood. Where evidence is missing, do not claim it exists; use a different honestly supported point.
 
 CV STRING should be an application-ready and gracefully organized plain-text CV (PDF layout is applied later):
@@ -578,7 +578,7 @@ def download_kit(job_id,kind):
  r=dict(row)
  details=extract_cv_details(r['cv_text'])
  name=details.get('name') or (r['name'] or '').strip() or 'Applicant'
- where=details.get('location') or ', '.join(v for v in (r['city'],r['country']) if v)
+ where=details.get('location','')  # Only information extracted from the actual uploaded CV.
  email=details.get('email','')
  try:
   if kind=='motivation':

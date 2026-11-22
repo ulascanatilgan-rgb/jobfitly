@@ -4,6 +4,7 @@ import io
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import json
+import re
 
 from pypdf import PdfReader
 
@@ -38,7 +39,7 @@ def test_profile_reads_actual_uploaded_cv():
     d=extract_cv_details(SOURCE_CV)
     assert d["name"] == "Alex Morgan"
     assert d["email"] == "alex.morgan@example.org"
-    assert "Antwerp" in d["location"]
+    assert d["location"]=="Antwerp, Belgium"
     assert "English" in d["languages"]
     assert "478" in d["phone"]
     assert "linkedin" in d["linkedin"]
@@ -96,7 +97,7 @@ def test_long_cv_keeps_navy_template_on_continuation_pages():
     pages=PdfReader(io.BytesIO(pdf)).pages
     text="\n".join(page.extract_text() for page in pages)
     assert len(pages)>1
-    assert "team 59" in text and "BSc Business Administration" in text
+    assert re.search(r"team\s+59",text) and "BSc Business Administration" in text
     assert text.count("Alex Morgan")>=len(pages)
 
 

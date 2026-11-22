@@ -53,7 +53,7 @@ def extract_cv_details(text):
                 result.setdefault("website",url)
         if re.search(r"\b(Belgium|Netherlands|France|Germany|Turkey|Türkiye|United Kingdom|United States)\b",line,re.I):
             if len(line)<105 and not any(x in low for x in ("experience","project","worked","company")):
-                result.setdefault("location",line[:105])
+                result.setdefault("location",next((part.strip() for part in line.split("|") if re.search(r"\b(Belgium|Netherlands|France|Germany|Turkey|Türkiye|United Kingdom|United States)\b",part,re.I)),line[:105])[:105])
     for i,line in enumerate(lines):
         if line.upper().rstrip(":") in ("LANGUAGES","LANGUAGE SKILLS"):
             values=[]
