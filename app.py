@@ -300,7 +300,7 @@ def fetch_candidates(profile):
   (dict(original,city='',keywords='',search_focus=focus or 'work directly supported by the CV',
         search_scope='all cities nationally, employer websites and ATS career boards'),30)
  ]
- for topic in topics[:3]:
+ for topic in topics[:2]:
   variants.append((dict(original,city='',keywords='',search_focus=topic,
                         search_scope='national, nearby and hybrid jobs with transferable duties'),30))
  variants.extend([
@@ -310,25 +310,32 @@ def fetch_candidates(profile):
         search_scope='active current nationwide career openings'),30)
  ])
  seen={};errors=[]
- for index,(variant,age) in enumerate(variants[:7]):
-  try:matches=search_jobs(variant,age)
-  except (requests.RequestException,ValueError) as e:
-   errors.append(type(e).__name__);continue
-  for job in matches:
-   if not job.get('title') or not job.get('company') or not _valid_public_link(job.get('url','')):continue
-   if job.get('published') and not _recent(job['published']):continue
-   country=str(original.get('country') or '').strip().lower()
-   listed=str(job.get('country') or '').strip().lower()
-   text=(str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
-   remote=any(w in text for w in ('remote anywhere','remote europe','worldwide remote',
-                                   'remote within europe','remote across europe','remote in eu'))
-   if country and listed and country not in listed and not remote:continue
-   key=job['url'].split('?')[0].rstrip('/').lower()
-   if key not in seen:seen[key]=job
-  # Retain a larger reserve in case some vacancies are closed or too specialized.
+ # Two parallel batches, rather than many slow sequential web calls.
+ # The second batch runs only when the first cannot provide a strong reserve.
+ def collect(batch):
+  with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+   futures=[pool.submit(search_jobs,variant,age) for variant,age in batch]
+   for future in futures:
+    try:matches=future.result()
+    except (requests.RequestException,ValueError) as e:
+     errors.append(type(e).__name__)
+     continue
+    for job in matches:
+     if not job.get('title') or not job.get('company') or not _valid_public_link(job.get('url','')):continue
+     if job.get('published') and not _recent(job['published']):continue
+     country=str(original.get('country') or '').strip().lower()
+     listed=str(job.get('country') or '').strip().lower()
+     txt=(str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
+     remote=any(w in txt for w in ('remote anywhere','remote europe','worldwide remote',
+                                    'remote within europe','remote across europe','remote in eu'))
+     if country and listed and country not in listed and not remote:continue
+     key=job['url'].split('?')[0].rstrip('/').lower()
+     if key not in seen:seen[key]=job
+ for first in (0,3):
+  collect(variants[first:first+3])
   plausible=sum(1 for job in seen.values() if specialty_fit(job.get('title'),cv)
-                and lexical_fit(job,cv)[0]>=48)
-  if index>=1 and plausible>=16:break
+                and lexical_fit(job,cv)[0]>=45)
+  if plausible>=15:break
  return list(seen.values()),errors
 
 def get_run(uid,date=None):
@@ -364,7 +371,7 @@ def run_search(uid):
    if cv_fit<56:
     # Keep genuinely adjacent roles when CV evidence matches their actual duties.
     overlap=sorted(tokenize(j.get('description','')) & tokenize(p['cv_for_matching']))
-    if len(overlap)<3 and cv_fit==0:continue
+    if len(overlap)<2 and cv_fit==0:continue
     cv_fit=max(cv_fit,min(52,27+3.5*len(overlap)))
     evidence=evidence or overlap[:6]
    candidates.append((j,cv_fit,evidence))
@@ -377,7 +384,7 @@ def run_search(uid):
    assessment=ai.get(idx) if idx<35 else None
    if assessment:
     semantic=assessment['cv_fit']
-    if semantic<25 and cv_fit<55:continue
+    if semantic<15 and cv_fit<45:continue
     cv_score=0.8*semantic+0.2*cv_fit
    else:
     cv_score=cv_fit
@@ -387,9 +394,9 @@ def run_search(uid):
    final=round(max(1,min(9.6,0.9*(cv_score/10)+0.1*pref_score)),1)
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
-  shortlist=ranked[:40]
+  shortlist=ranked[:30]
   checked=[]
-  with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+  with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
    verified=list(pool.map(lambda entry:_check_live(entry[1]),shortlist))
   for entry,live in zip(shortlist,verified):
    if live:checked.append(entry)
