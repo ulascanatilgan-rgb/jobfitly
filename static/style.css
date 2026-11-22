@@ -431,3 +431,49 @@ body{font-size:13px}
 .cv-fact strong{font-size:11px;color:#28242a;font-weight:550;overflow-wrap:anywhere}
 .profile-small-note{color:#868086;font-size:10px;line-height:1.6;margin:14px 0 20px}
 @media(max-width:790px){.flow-app-footer{gap:3px 12px}.cv-fact{grid-template-columns:88px minmax(0,1fr)}}
+
+/* Compact, right-aligned subscription caption (not a long line). */
+.hero-clean-inner .hero-pricing{flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:5px;width:100%;text-align:right}
+.hero-clean-inner .hero-pricing-price,.hero-clean-inner .hero-pricing-tagline{display:block}
+@keyframes jobfitly-hero-impact{
+ 0%{opacity:0;filter:blur(14px);transform:perspective(850px) translateZ(-95px) translateY(25px) scale(.94)}
+ 45%{opacity:.75;filter:blur(5px)}
+ 100%{opacity:1;filter:blur(0);transform:perspective(850px) translateZ(0) translateY(0) scale(1)}
+}
+.landing-clean .hero-clean-inner h1.reveal-intro{
+ animation:jobfitly-hero-impact 2.15s cubic-bezier(.16,.75,.24,1) .12s both;
+ transform-origin:center center;
+}
+.landing-clean .reveal-2{animation-delay:1.15s}
+.landing-clean .reveal-3{animation-delay:1.6s}
+.landing-clean .reveal-4{animation-delay:1.8s}
+.landing-clean .reveal-5{animation-delay:4.85s}
+.landing-clean .reveal-6{animation-delay:5.2s}
+.landing-clean .reveal-pricing{animation-delay:5.6s}
+/* Confirmation is calm and compact; makes ambiguous CV extraction fixable. */
+.profile-name-form{margin:13px 0 18px}
+.profile-name-form label{display:block;font-size:10px;font-weight:700;color:#4e444a;margin-bottom:6px}
+.profile-name-row{display:flex;gap:8px;align-items:center}
+.profile-name-row input{flex:1;min-width:0;font-size:12px;border:1px solid #d8cbd1;border-radius:7px;padding:10px 12px}
+.profile-name-row .btn{white-space:nowrap;font-size:10px}
+.profile-name-warning,.profile-name-caption{font-size:11px;line-height:1.55;margin:4px 0 10px}
+.profile-name-warning{color:#850d45}
+/* Animated burgundy / black hourglass displayed during document generation. */
+.kit-preparing{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:245px;padding:28px 18px;text-align:center;color:#242024;gap:10px}
+.kit-preparing strong{font-size:15px;letter-spacing:-.02em}
+.kit-preparing span{font-size:11px;line-height:1.55;color:#6d656b;max-width:300px}
+.kit-hourglass{width:68px;height:76px;overflow:visible;animation:kit-hourglass-flip 3s ease-in-out infinite;transform-origin:50% 50%;margin-bottom:10px}
+.kit-hourglass-frame{stroke:#202025;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.kit-hourglass-sand-top,.kit-hourglass-sand-bottom{fill:#850d45}
+.kit-hourglass-sand-top{animation:kit-sand-top 3s ease-in-out infinite}
+.kit-hourglass-sand-bottom{animation:kit-sand-bottom 3s ease-in-out infinite}
+.kit-hourglass-stream{stroke:#850d45;stroke-width:3;stroke-linecap:round;stroke-dasharray:2 4;animation:kit-sand-stream .55s linear infinite}
+@keyframes kit-hourglass-flip{0%,75%{transform:rotate(0)}95%,100%{transform:rotate(180deg)}}
+@keyframes kit-sand-top{0%{opacity:1;transform:scaleY(1)}72%{opacity:.25;transform:scaleY(.08)}100%{opacity:1;transform:scaleY(1)}}
+@keyframes kit-sand-bottom{0%{opacity:.18;transform:scaleY(.12)}72%{opacity:1;transform:scaleY(1)}100%{opacity:.18;transform:scaleY(.12)}}
+@keyframes kit-sand-stream{to{stroke-dashoffset:-12}}
+@media(max-width:790px){.profile-name-row{flex-wrap:wrap}.profile-name-row .btn{min-height:39px}}
+@media(prefers-reduced-motion:reduce){
+ .landing-clean .hero-clean-inner h1.reveal-intro{animation:none!important;opacity:1!important;filter:none!important;transform:none!important}
+ .kit-hourglass,.kit-hourglass-sand-top,.kit-hourglass-sand-bottom,.kit-hourglass-stream{animation:none!important}
+}

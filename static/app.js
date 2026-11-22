@@ -35,21 +35,71 @@ function showJob(id){let j=[...state.jobs,...state.watch].find(x=>x.id===id);if(
 function renderProfile(){
  const p=state.me.profile||{},d=p.cv_details||{};
  const label={name:'Name',email:'Email',phone:'Phone',location:'Location',linkedin:'LinkedIn',website:'Website',languages:'Languages',headline:'Professional headline',nationality:'Nationality',date_of_birth:'Date of birth'};
- const rows=Object.entries(d).filter(([k,v])=>v).map(([k,v])=>'<div class="cv-fact"><span>'+esc(label[k]||k.replaceAll('_',' '))+'</span><strong>'+esc(String(v))+'</strong></div>').join('');
+ const rows=Object.entries(d).filter(([k,v])=>v&&k!=='name_confirmed').map(([k,v])=>'<div class="cv-fact"><span>'+esc(label[k]||k.replaceAll('_',' '))+'</span><strong>'+esc(String(v))+'</strong></div>').join('');
  const scores=(state.config.questions||[]).map(q=>({label:q.text,score:(p.questions||{})[q.id]??5})).sort((a,b)=>b.score-a.score).slice(0,4);
  const preferences=Object.values(p.swipes||{}).filter(Boolean);
+ const nameNotice=p.name_needs_confirmation?'<p class="profile-name-warning">We could not confidently identify your name from the uploaded CV. Please enter your real full name below before generating documents.</p>':'<p class="profile-name-caption">Please verify the name extracted from your CV. Correct it here if necessary.</p>';
+ const confirmName='<form class="profile-name-form" onsubmit="saveConfirmedName();return false;"><label for="confirmed-name">Full name</label><div class="profile-name-row"><input id="confirmed-name" autocomplete="name" maxlength="80" placeholder="First and last name" value="'+esc(d.name||'')+'"><button class="btn btn-outline" type="submit">Confirm name</button></div></form>';
  $('main-panel').innerHTML='<div class="page-kicker">PERSONAL PROFILE</div><h1 class="page-heading">Your profile<span class="accent">.</span></h1>'
- +'<p class="page-subheading">Your personal details come directly from your uploaded CV. Missing information stays blank.</p>'
- +'<section class="profile-cv-facts"><h2>'+esc(d.name||p.name||'Your CV profile')+'</h2>'
+ +'<p class="page-subheading">Personal details from your CV. The name is validated separately so a location cannot become your identity.</p>'
+ +'<section class="profile-cv-facts"><h2>'+esc(d.name||'Name confirmation needed')+'</h2>'+nameNotice+confirmName
  +(rows||'<p class="flow-muted">Upload a readable CV to extract your details.</p>')+'</section>'
  +'<section class="profile-cv-facts"><h2>What you are looking for</h2><p>'+esc([p.city,p.country,p.language,...preferences].filter(Boolean).join(' · ')||'Set your job preferences.')+'</p></section>'
  +'<section class="profile-cv-facts"><h2>Work style</h2><p>'+esc(scores.filter(q=>q.score>=7).map(q=>q.label.replace(/^I /,'')).join(' · ')||'Add your work-style preferences.')+'</p></section>'
- +'<p class="profile-small-note">Your uploaded CV is the source of truth for tailored applications. You can update it at any time.</p>'
+ +'<p class="profile-small-note">Your CV remains the source of truth. Confirmed names are used consistently in both PDF documents.</p>'
  +'<button class="subtle-button" style="color:var(--plum)" onclick="deleteAccount()">Delete my account and data ↗</button>';
 }
-async function openKit(id,tab='motivation'){let j=state.watch.find(x=>x.id===id);if(!j)return;state.job=j;state.kit=null;state.kitTab=tab;try{state.kit=await api('/api/kit/'+id)}catch{}renderKit();await generateKit(true)}
-function renderKit(){let j=state.job;let kit=state.kit;let content=kit?`<div class="kit-tabs"><button class="${state.kitTab==='motivation'?'active':''}" onclick="switchKit('motivation')">Motivation statement</button><button class="${state.kitTab==='cv'?'active':''}" onclick="switchKit('cv')">Tailored CV</button></div><div class="kit-text">${esc(kit[state.kitTab])}</div><div class="kit-actions"><a class="btn btn-dark" href="/api/kit/${j.id}/download/${state.kitTab}" download>Download ${state.kitTab==='cv'?'tailored CV':'motivation'} (PDF) ↓</a><button class="btn btn-outline" onclick="copyKit()">Copy text</button><button class="btn btn-outline" onclick="generateKit(true)">Regenerate ↻</button></div>`:`<div class="kit-banner"><strong>One role. Two thoughtful drafts.</strong><p>We'll tailor your CV and write a concise motivation statement based on your real experience and this job's requirements. Review everything before applying.</p></div><button class="btn btn-dark" id="generate-kit" onclick="generateKit()">Generate application kit ↗</button>`;$('main-panel').innerHTML=`<button class="subtle-button kit-back" onclick="navigate('watch')">← Back to My jobs</button><div class="page-kicker">APPLICATION KIT</div><h1 class="page-heading">Ready to apply<span class="accent">.</span></h1><p class="page-subheading">${esc(j.title)} · ${esc(j.company)}</p>${j.url?`<a class="text-action" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open original listing ↗</a>`:''}<div id="kit-body">${content}</div><p class="privacy-note" style="margin-top:25px">Drafts need your review. When AI is enabled, generating documents sends CV text and role details to OpenAI.</p>`;}
-async function generateKit(replace=false){let btn=$('generate-kit');if(btn){btn.disabled=true;btn.textContent='Preparing your drafts…'}try{const kit=await api('/api/kit/'+state.job.id,{method:'POST'});state.kit=kit;renderKit();notify(kit.engine==='AI'?'Your tailored drafts are ready.':'Basic drafts are ready; connect OpenAI for stronger tailoring.')}catch(e){notify(e.message,true);if(btn){btn.disabled=false;btn.textContent='Generate application kit ↗'}}}
+async function saveConfirmedName(){
+ const input=$('confirmed-name'),name=input&&input.value.trim();
+ if(!name){notify('Enter your first and last name.',true);return}
+ try{
+  const response=await api('/api/profile/name',{method:'POST',body:JSON.stringify({name})});
+  state.me.profile=response.profile;renderProfile();notify('Your name is confirmed for future CVs and motivation letters.');
+ }catch(error){notify(error.message,true)}
+}
+async function openKit(id,tab='motivation'){
+ const job=state.watch.find(x=>x.id===id);if(!job)return;
+ state.job=job;state.kit=null;state.kitTab=tab;state.kitBusy=true;
+ renderKit();await generateKit();
+}
+function kitBusyMarkup(){
+ return '<div class="kit-preparing" role="status" aria-live="polite">'
+ +'<svg class="kit-hourglass" viewBox="0 0 80 90" aria-hidden="true" focusable="false">'
+ +'<path class="kit-hourglass-frame" d="M18 7 H62 M18 83 H62 M23 8 V19 Q23 33 40 45 Q57 57 57 71 V82 M57 8 V19 Q57 33 40 45 Q23 57 23 71 V82" />'
+ +'<path class="kit-hourglass-sand-top" d="M28 19 H52 Q52 29 40 40 Q28 29 28 19 Z"/>'
+ +'<path class="kit-hourglass-sand-bottom" d="M40 51 Q28 65 28 76 H52 Q52 65 40 51 Z"/>'
+ +'<path class="kit-hourglass-stream" d="M40 43 V52" />'
+ +'</svg>'
+ +'<strong>Preparing your application</strong>'
+ +'<span>Matching your experience to the vacancy and refining the document.</span>'
+ +'</div>';
+}
+function renderKit(){
+ const j=state.job,kit=state.kit;
+ const content=state.kitBusy?kitBusyMarkup():kit?
+ '<div class="kit-tabs"><button class="'+(state.kitTab==='motivation'?'active':'')+'" onclick="switchKit(\'motivation\')">Motivation statement</button><button class="'+(state.kitTab==='cv'?'active':'')+'" onclick="switchKit(\'cv\')">Tailored CV</button></div>'
+ +'<div class="kit-text">'+esc(kit[state.kitTab])+'</div>'
+ +'<div class="kit-actions"><a class="btn btn-dark" href="/api/kit/'+j.id+'/download/'+state.kitTab+'" download>Download '+(state.kitTab==='cv'?'tailored CV':'motivation')+' (PDF) ↓</a>'
+ +'<button class="btn btn-outline" onclick="copyKit()">Copy text</button><button class="btn btn-outline" onclick="generateKit()">Regenerate ↻</button></div>'
+ :'<div class="kit-banner"><strong>One role. Two thoughtful drafts.</strong><p>We tailor your CV and motivation from the uploaded CV and this vacancy.</p></div><button class="btn btn-dark" onclick="generateKit()">Generate application kit ↗</button>';
+ $('main-panel').innerHTML='<button class="subtle-button kit-back" onclick="navigate(\'watch\')">← Back to My jobs</button>'
+ +'<div class="page-kicker">APPLICATION KIT</div><h1 class="page-heading">Ready to apply<span class="accent">.</span></h1>'
+ +'<p class="page-subheading">'+esc(j.title)+' · '+esc(j.company)+'</p>'
+ +(j.url?'<a class="text-action" href="'+esc(j.url)+'" target="_blank" rel="noopener noreferrer">Open original listing ↗</a>':'')
+ +'<div id="kit-body">'+content+'</div>'
+ +'<p class="privacy-note" style="margin-top:25px">Review the generated draft. Document generation sends CV text and vacancy details to OpenAI when AI is enabled.</p>';
+}
+async function generateKit(){
+ if(state.kitBusyRequest)return;
+ state.kitBusy=true;state.kitBusyRequest=true;renderKit();
+ try{
+  const kit=await api('/api/kit/'+state.job.id,{method:'POST'});
+  state.kit=kit;state.kitBusy=false;renderKit();
+  notify(kit.engine==='AI'?'Your tailored documents are ready.':'Your draft is ready.');
+ }catch(error){
+  state.kitBusy=false;renderKit();notify(error.message,true);
+ }finally{state.kitBusyRequest=false}
+}
 function switchKit(t){state.kitTab=t;renderKit()}
 function downloadKit(){const link=document.createElement('a');link.href=`/api/kit/${state.job.id}/download/${state.kitTab}`;link.download='';document.body.appendChild(link);link.click();link.remove()}
 async function copyKit(){try{await navigator.clipboard.writeText(state.kit[state.kitTab]);notify('Copied to clipboard.')}catch{notify('Copy not available in this browser.',true)}}
