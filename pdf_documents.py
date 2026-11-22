@@ -13,6 +13,14 @@ from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from pathlib import Path as FontPath
+import reportlab
+_FONTDIR=FontPath(reportlab.__file__).resolve().parent / "fonts"
+for _font, _file in (("CVUnicode", "Vera.ttf"), ("CVUnicodeBold", "VeraBd.ttf")):
+    if _font not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(_font,str(_FONTDIR / _file)))
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, HRFlowable
 
@@ -46,7 +54,7 @@ def _date():
 
 def _paragraph(text, font_size, leading, bold=False, color=INK):
     return Paragraph(_xml(text), ParagraphStyle(
-        "fitly", fontName="Helvetica-Bold" if bold else "Helvetica",
+        "fitly", fontName="CVUnicodeBold" if bold else "CVUnicode",
         fontSize=font_size, leading=leading, textColor=color,
         allowWidows=0, allowOrphans=0
     ))
@@ -122,15 +130,15 @@ def motivation_pdf(name, role, company, text, city="", email=""):
     c.setTitle(f"Motivation | {role} | {company}")
     c.setAuthor(name)
     # Top band: personal identity and today's date.
-    c.setFillColor(INK);c.setFont("Helvetica-Bold",10.8)
+    c.setFillColor(INK);c.setFont("CVUnicodeBold",10.8)
     c.drawString(LEFT,H-53,name[:76])
-    c.setFillColor(MUTED);c.setFont("Helvetica",9.2)
+    c.setFillColor(MUTED);c.setFont("CVUnicode",9.2)
     c.drawRightString(W-RIGHT,H-53,date)
     c.setStrokeColor(RULE);c.setLineWidth(0.75)
     c.line(LEFT,H-69,W-RIGHT,H-69)
-    c.setFillColor(INK);c.setFont("Helvetica-Bold",22)
+    c.setFillColor(INK);c.setFont("CVUnicodeBold",22)
     c.drawString(LEFT,H-106,"MOTIVATION")
-    c.setFillColor(INK);c.setFont("Helvetica-Bold",11.4)
+    c.setFillColor(INK);c.setFont("CVUnicodeBold",11.4)
     # Long role/company text wraps without overflowing.
     rolep=_paragraph(role,11.2,14.7,True)
     _,roleh=rolep.wrap(content_width,80)
@@ -142,7 +150,7 @@ def motivation_pdf(name, role, company, text, city="", email=""):
     ip.drawOn(c,LEFT,y-ih)
     y-=ih+22
     for item,(number,hh,body,bh,rowh) in zip(sections,parts):
-        c.setFillColor(BURGUNDY);c.setFont("Helvetica-Bold",10)
+        c.setFillColor(BURGUNDY);c.setFont("CVUnicodeBold",10)
         c.drawString(LEFT,y-11,f'{item["num"]}.')
         number.drawOn(c,LEFT+30,y-hh)
         y-=max(18,hh)
@@ -153,12 +161,12 @@ def motivation_pdf(name, role, company, text, city="", email=""):
         else:y-=gap
     c.setStrokeColor(RULE);c.setLineWidth(0.75)
     c.line(LEFT,75,W-RIGHT,75)
-    c.setFillColor(INK);c.setFont("Helvetica-Bold",9.5)
+    c.setFillColor(INK);c.setFont("CVUnicodeBold",9.5)
     c.drawString(LEFT,58,name[:92])
     detail=" · ".join(v for v in (_clean(city),_clean(email)) if v)
     if detail:
-        c.setFillColor(MUTED);c.setFont("Helvetica",8.2)
-        if stringWidth(detail,"Helvetica",8.2)>content_width:
+        c.setFillColor(MUTED);c.setFont("CVUnicode",8.2)
+        if stringWidth(detail,"CVUnicode",8.2)>content_width:
             detail=detail[:100]
         c.drawString(LEFT,45,detail)
     c.showPage();c.save()
@@ -172,9 +180,9 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email=""):
     width=W-LEFT-RIGHT
     doc=SimpleDocTemplate(stream,pagesize=A4,leftMargin=LEFT,rightMargin=RIGHT,
         topMargin=104,bottomMargin=67,title=f"CV | {name} | {role}")
-    body=ParagraphStyle("cv-body",fontName="Helvetica",fontSize=9.2,leading=14.4,
+    body=ParagraphStyle("cv-body",fontName="CVUnicode",fontSize=9.2,leading=14.4,
         textColor=INK,spaceAfter=5)
-    heading=ParagraphStyle("cv-head",fontName="Helvetica-Bold",fontSize=10.2,leading=15,
+    heading=ParagraphStyle("cv-head",fontName="CVUnicodeBold",fontSize=10.2,leading=15,
         textColor=BURGUNDY,spaceBefore=13,spaceAfter=6,keepWithNext=True)
     bullet=ParagraphStyle("cv-bullet",parent=body,leftIndent=11,firstLineIndent=-7)
     detail=ParagraphStyle("cv-detail",parent=body,textColor=MUTED,fontSize=8.5)
@@ -197,16 +205,16 @@ def tailored_cv_pdf(name,role,company,cv_text,city="",email=""):
     if not story:story.append(Paragraph("CV content was not provided.",body))
     def header(c,document):
         c.saveState()
-        c.setFillColor(INK);c.setFont("Helvetica-Bold",18)
-        c.drawString(LEFT,H-46,_fit_text(name,"Helvetica-Bold",18,width))
-        c.setFillColor(INK);c.setFont("Helvetica",9)
-        c.drawString(LEFT,H-63,_fit_text(role,"Helvetica",9,width))
-        c.setFillColor(MUTED);c.setFont("Helvetica",8.5)
-        c.drawString(LEFT,H-78,_fit_text("Application to "+_clean(company),"Helvetica",8.5,width))
+        c.setFillColor(INK);c.setFont("CVUnicodeBold",18)
+        c.drawString(LEFT,H-46,_fit_text(name,"CVUnicodeBold",18,width))
+        c.setFillColor(INK);c.setFont("CVUnicode",9)
+        c.drawString(LEFT,H-63,_fit_text(role,"CVUnicode",9,width))
+        c.setFillColor(MUTED);c.setFont("CVUnicode",8.5)
+        c.drawString(LEFT,H-78,_fit_text("Application to "+_clean(company),"CVUnicode",8.5,width))
         c.setStrokeColor(RULE);c.setLineWidth(.8)
         c.line(LEFT,H-91,W-RIGHT,H-91)
         c.setStrokeColor(RULE);c.line(LEFT,53,W-RIGHT,53)
-        c.setFillColor(MUTED);c.setFont("Helvetica",8)
+        c.setFillColor(MUTED);c.setFont("CVUnicode",8)
         contact=" · ".join(v for v in (_clean(city),_clean(email)) if v)
         c.drawString(LEFT,40,contact[:96])
         c.drawRightString(W-RIGHT,40,str(document.page))
