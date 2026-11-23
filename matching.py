@@ -98,7 +98,7 @@ def ai_cv_fit(profile, jobs):
         {
             "id": i,
             "title": str(job.get("title") or "")[:180],
-            "description": str(job.get("description") or "")[:1600]
+            "description": str(job.get("description") or "")[:1100]
         } for i, job in enumerate(jobs[:35])
     ]
     prompt = {
@@ -133,7 +133,7 @@ def ai_cv_fit(profile, jobs):
                 "temperature": 0,
                 "max_tokens": 2700
             },
-            timeout=65,
+            timeout=(3,19),
         )
         response.raise_for_status()
         result = json.loads(response.json()["choices"][0]["message"]["content"])

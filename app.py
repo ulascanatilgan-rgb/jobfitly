@@ -260,14 +260,14 @@ def _check_live(job):
  url=job.get('url','')
  if not _valid_public_link(url):return False
  try:
-  r=requests.get(url,timeout=7,headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
+  r=requests.get(url,timeout=(2,4),headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
   # Avoid arbitrary redirects to internal hosts; follow only public HTTPS destinations.
-  for _ in range(4):
+  for _ in range(2):
    if r.status_code not in (301,302,303,307,308):break
    nxt=requests.compat.urljoin(r.url,r.headers.get('Location',''))
    r.close()
    if not _valid_public_link(nxt):return False
-   r=requests.get(nxt,timeout=7,headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
+   r=requests.get(nxt,timeout=(2,4),headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
   good=r.status_code==200
   r.close()
   return good
@@ -381,10 +381,24 @@ def run_search(uid):
   row=c.execute('SELECT cv_text FROM profiles WHERE user_id=?',(uid,)).fetchone()
  p['cv_for_matching']=str(row['cv_text'] if row else '')[:15000]
  if not p['cv_for_matching'].strip():return None,'Upload a readable CV before running.',400
+ # Recover interrupted searches when a browser disconnects or worker terminates.
  try:
   with conn() as c:
-   c.execute('INSERT INTO daily_runs(user_id,local_day,run_at,state) VALUES(?,?,?,?)',(uid,today(),now(),'working'))
- except sqlite3.IntegrityError:return None,'Today’s Run was already used. Use Reset matches to start again.',409
+   previous=c.execute("SELECT id,run_at,state FROM daily_runs WHERE user_id=? AND local_day=?",
+                      (uid,today())).fetchone()
+   if previous:
+    if previous['state']=='complete':
+     return None,'Your search results already exist. Clear and search again to refresh.',409
+    started=_parsed_date(previous['run_at'])
+    stale=not started or datetime.datetime.now(datetime.timezone.utc)-started>datetime.timedelta(minutes=3)
+    if stale:
+     c.execute("DELETE FROM daily_runs WHERE id=?",(previous['id'],))
+    else:
+     return None,'A search is already in progress. Please try again shortly.',409
+   c.execute('INSERT INTO daily_runs(user_id,local_day,run_at,state) VALUES(?,?,?,?)',
+             (uid,today(),now(),'working'))
+ except sqlite3.IntegrityError:
+  return None,'A job search is currently running. Try again shortly.',409
  try:
   raw,errors=fetch_candidates(p)
   # A specialized job without corresponding real CV history never passes.
