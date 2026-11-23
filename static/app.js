@@ -47,6 +47,48 @@ function renderWatch(){const items=state.watch.map(j=>`<div class="saved-row"><d
 async function toggleSave(id,saved){try{await api('/api/watchlist/'+id,{method:saved?'DELETE':'POST'});await loadContent();state.screen==='today'?renderToday():renderWatch();notify(saved?'Removed from MyJobs.':'Added to MyJobs.')}catch(e){notify(e.message,true)}}
 function removeSave(id){toggleSave(id,true)}
 function showJob(id){let j=[...state.jobs,...state.watch].find(x=>x.id===id);if(!j)return;const overlay=document.createElement('div');overlay.id='detail-modal';overlay.className='modal-back';overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.innerHTML=`<div class="modal"><button class="close" aria-label="Close" onclick="$('detail-modal').remove()">×</button><div class="page-kicker">${esc(j.company)}</div><h2>${esc(j.title)}</h2><p>${esc(j.city)} · ${esc(j.country)} · ${j.score}/10 profile fit</p><div class="kit-banner"><strong>Why this matches</strong><p>${j.matched_terms?.length?'Your background and this listing share: '+j.matched_terms.map(esc).join(', ')+'.':'This posting has some relevance to your background and preferences; inspect the original listing before applying.'}</p></div><p style="max-height:220px;overflow:auto;white-space:pre-wrap">${esc(j.description||'No description available.')}</p>${['Himalayas','Jobicy','Arbeitnow'].includes(j.source)?`<p class="job-source-credit">Listing supplied by ${esc(j.source)}. <a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View source ↗</a></p>`:''}<div class="kit-actions">${j.url?`<a class="btn btn-dark" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View original listing ↗</a>`:'<span class="tag">Sample listing — no application link</span>'}<button class="btn btn-outline" onclick="$('detail-modal').remove();toggleSave(${j.id},${Boolean(j.saved)})">${j.saved?'Remove from saved':'+ MyJobs'}</button></div></div>`;document.body.appendChild(overlay)}
+function renderWorkStyleRadar(answers={}){
+ const dimensions=[
+  {label:'Analysis',items:['analytical','detail']},
+  {label:'Creativity',items:['creative','ambiguity']},
+  {label:'Strategy',items:['strategy','ownership']},
+  {label:'Leadership',items:['leadership','coordination']},
+  {label:'Teamwork',items:['collaboration','people']},
+  {label:'Client focus',items:['client_energy','communication']},
+  {label:'Independence',items:['autonomy','structure']},
+  {label:'Execution',items:['operations','pace']}
+ ];
+ const values=dimensions.map(dim=>{
+   const entries=dim.items.filter(key=>Number.isFinite(Number(answers[key]))&&answers[key]!=null);
+   return entries.length?entries.reduce((sum,key)=>sum+Number(answers[key]),0)/entries.length:5;
+ });
+ const answered=Object.keys(answers||{}).length;
+ const cx=190,cy=178,radius=112;
+ const location=(index,magnitude)=>{const theta=-Math.PI/2+index*Math.PI/4;return [cx+radius*magnitude*Math.cos(theta),cy+radius*magnitude*Math.sin(theta)]};
+ const coords=pts=>pts.map(([x,y])=>x.toFixed(1)+','+y.toFixed(1)).join(' ');
+ const grid=[.25,.5,.75,1].map(level=>'<polygon class="radar-grid-ring" points="'+coords(dimensions.map((_,i)=>location(i,level)))+'"/>').join('');
+ const axes=dimensions.map((_,i)=>{const [x,y]=location(i,1);return '<line class="radar-axis" x1="'+cx+'" y1="'+cy+'" x2="'+x+'" y2="'+y+'"/>'}).join('');
+ const labels=dimensions.map((dim,i)=>{
+   const [x,y]=location(i,1.29);
+   const anchor=x<cx-14?'end':x>cx+14?'start':'middle';
+   return '<text class="radar-label" x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="'+anchor+'">'+esc(dim.label)+'</text>';
+ }).join('');
+ const filled=coords(dimensions.map((_,i)=>location(i,values[i]/10)));
+ const vertices=dimensions.map((_,i)=>{
+   const [x,y]=location(i,values[i]/10);
+   return '<circle class="radar-vertex" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3.1"/>';
+ }).join('');
+ const summary=dimensions.map((dim,i)=>dim.label+': '+values[i].toFixed(1)+'/10').join(', ');
+ return '<div class="radar-wrap">'
+  +'<div class="radar-intro"><span>YOUR WORK STYLE</span><strong>'+answered+' / 20 responses</strong></div>'
+  +'<svg class="work-radar" viewBox="0 0 380 354" role="img" aria-label="'+esc(summary)+'">'
+  +'<g>'+grid+axes+'</g>'+labels
+  +(answered?'<polygon class="radar-surface" points="'+filled+'"/>'+vertices:'')
+  +'<circle class="radar-center" cx="'+cx+'" cy="'+cy+'" r="2.5"/>'
+  +'</svg>'
+  +'<p class="radar-caption">'+(answered?'An illustrative view of how you prefer to work.':'Complete Tell about yourself to draw your work-style profile.')+' It does not change your job matching.</p>'
+  +'</div>';
+}
 function renderProfile(){
  const p=state.me.profile||{},d=p.cv_details||{};
  const label={name:'Name',email:'Email',phone:'Phone',location:'Location',linkedin:'LinkedIn',website:'Website',languages:'Languages',headline:'Professional headline',nationality:'Nationality',date_of_birth:'Date of birth'};
@@ -60,7 +102,7 @@ function renderProfile(){
  +'<section class="profile-cv-facts"><h2>'+esc(d.name||'Name confirmation needed')+'</h2>'+nameNotice+confirmName
  +(rows||'<p class="flow-muted">Upload a readable CV to extract your details.</p>')+'</section>'
  +'<section class="profile-cv-facts"><h2>What you are looking for</h2><p>'+esc([p.city,p.country,p.language,...preferences].filter(Boolean).join(' · ')||'Set your job preferences.')+'</p></section>'
- +'<section class="profile-cv-facts"><h2>Work style</h2><p>'+esc(scores.filter(q=>q.score>=7).map(q=>q.label.replace(/^I /,'')).join(' · ')||'Add your work-style preferences.')+'</p></section>'
+ +'<section class="profile-cv-facts profile-work-style"><h2>Work style</h2>'+renderWorkStyleRadar(p.questions||{})+'</section>'
  +'<p class="profile-small-note">Your CV remains the source of truth. Confirmed names are used consistently in both PDF documents.</p>'
  +'<button class="subtle-button" style="color:var(--plum)" onclick="deleteAccount()">Delete my account and data ↗</button>';
 }
@@ -94,7 +136,7 @@ function renderKit(){
  const content=state.kitBusy?kitBusyMarkup():kit?
  '<div class="kit-tabs"><button class="'+(state.kitTab==='motivation'?'active':'')+'" onclick="switchKit(\'motivation\')">Motivation statement</button><button class="'+(state.kitTab==='cv'?'active':'')+'" onclick="switchKit(\'cv\')">Tailored CV</button></div>'
  +'<div class="kit-text">'+esc(kit[state.kitTab])+'</div>'
- +'<div class="kit-actions"><a class="btn btn-dark" href="/api/kit/'+j.id+'/download/'+state.kitTab+'" download>Download '+(state.kitTab==='cv'?'tailored CV':'motivation')+' (PDF) ↓</a>'
+ +'<div class="kit-actions"><button class="btn btn-dark" onclick="previewKitPdf()">Preview & download PDF ↗</button>'
  +'<button class="btn btn-outline" onclick="copyKit()">Copy text</button><button class="btn btn-outline" onclick="generateKit()">Regenerate ↻</button></div>'
  :'<div class="kit-banner"><strong>One role. Two thoughtful drafts.</strong><p>We tailor your CV and motivation from the uploaded CV and this vacancy.</p></div><button class="btn btn-dark" onclick="generateKit()">Generate application kit ↗</button>';
  $('main-panel').innerHTML='<button class="subtle-button kit-back" onclick="navigate(\'watch\')">← Back to My jobs</button>'
@@ -116,7 +158,49 @@ async function generateKit(){
  }finally{state.kitBusyRequest=false}
 }
 function switchKit(t){state.kitTab=t;renderKit()}
-function downloadKit(){const link=document.createElement('a');link.href=`/api/kit/${state.job.id}/download/${state.kitTab}`;link.download='';document.body.appendChild(link);link.click();link.remove()}
+function closePdfPreview(){
+ const screen=$('pdf-preview');
+ if(screen)screen.remove();
+ document.body.classList.remove('pdf-open');
+}
+function previewKitPdf(){
+ if(!state.job||!state.kit){notify('Generate a document before opening the PDF.',true);return;}
+ closePdfPreview();
+ const kind=state.kitTab,job=state.job;
+ const label=kind==='cv'?'Tailored CV':'Motivation statement';
+ const preview=document.createElement('div');
+ preview.className='pdf-preview-screen';preview.id='pdf-preview';
+ preview.innerHTML='<header class="pdf-preview-header">'
+ +'<button class="pdf-back" type="button" onclick="closePdfPreview()">← Back to JobFitly</button>'
+ +'<strong>'+label+'</strong>'
+ +'<button class="pdf-save btn btn-dark" type="button" onclick="savePdfFromApp()">Save PDF ↓</button>'
+ +'</header>'
+ +'<iframe class="pdf-preview-frame" title="'+label+' PDF preview" src="/api/kit/'+job.id+'/download/'+kind+'?view=1"></iframe>'
+ +'<p class="pdf-preview-tip">The preview stays inside JobFitly. Use Back to return to your application.</p>';
+ document.body.appendChild(preview);
+ document.body.classList.add('pdf-open');
+}
+async function savePdfFromApp(){
+ if(!state.job||!state.kit)return;
+ const kind=state.kitTab,job=state.job;
+ const endpoint='/api/kit/'+job.id+'/download/'+kind;
+ try{
+  const response=await fetch(endpoint,{credentials:'same-origin'});
+  if(!response.ok){
+   const data=await response.json().catch(()=>({}));
+   throw new Error(data.error||'PDF could not be prepared.');
+  }
+  const blob=await response.blob();
+  if(blob.type!=='application/pdf')throw new Error('Unexpected file format.');
+  const link=URL.createObjectURL(blob),anchor=document.createElement('a');
+  const company=String(job.company||'Application').replace(/[^a-z0-9_-]/gi,'_').slice(0,40);
+  anchor.href=link;anchor.download='JobFitly_'+kind+'_'+company+'.pdf';
+  document.body.appendChild(anchor);anchor.click();anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(link),25000);
+  notify('PDF ready. Use Back to JobFitly when finished.');
+ }catch(error){notify(error.message,true)}
+}
+function downloadKit(){previewKitPdf()}
 async function copyKit(){try{await navigator.clipboard.writeText(state.kit[state.kitTab]);notify('Copied to clipboard.')}catch{notify('Copy not available in this browser.',true)}}
 function renderCV(){const p=state.me.profile;$('main-panel').innerHTML=`<div class="page-kicker">YOUR EXPERIENCE</div><h1 class="page-heading">CV<span class="accent">.</span></h1><p class="page-subheading">${p.has_cv?esc(p.cv_name):'Upload your CV to start.'}</p><label for="cv-edit-file" class="file-drop"><span class="file-icon">⇧</span><strong id="cv-edit-label">${p.has_cv?'Replace CV':'Choose a CV'}</strong><span>PDF, DOCX or TXT · Max 5 MB</span><input id="cv-edit-file" type="file" accept=".pdf,.docx,.txt"></label><button class="btn btn-dark margin-top" onclick="saveCV()">Save CV →</button>`;const input=$('cv-edit-file');input.onchange=()=>{$('cv-edit-label').textContent=input.files[0]?.name||'Choose a CV';};}
 async function saveCV(){const file=$('cv-edit-file').files[0];if(!file){notify('Select a file.',true);return}let fd=new FormData();fd.append('file',file);try{const r=await api('/api/cv',{method:'POST',body:fd});state.me.profile=r.profile;notify('CV saved. Personal details were extracted into Your profile.');renderCV()}catch(e){notify(e.message,true)}}
