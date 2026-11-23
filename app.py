@@ -351,76 +351,60 @@ def _related_role_focus(cv_text):
  return [focus for keywords,focus in categories if any(re.search(r'\b'+re.escape(w)+r'\b',cv) for w in keywords)][:4]
 
 def fetch_candidates(profile):
- """Collect job-board APIs and one focused live-web search simultaneously.
-
- Prefer source-verified structured feeds to prevent 'zero results' whenever
- OpenAI web citations are sparse. Profile preferences are strictly optional.
- """
+ """Shared employer ATS + existing public feeds; paid web searches only when needed."""
  original=dict(profile)
- place=str((original.get('cv_details') or {}).get('location') or '')
- if not str(original.get('country') or '').strip() and place:
-  named_country=re.search(r'\b(Belgium|Netherlands|France|Germany|Italy|Spain|Portugal|'
-                         r'Luxembourg|Switzerland|Ireland|Turkey|Türkiye|Canada|'
-                         r'United Kingdom|United States)\b',place,re.I)
-  if named_country:
-   original['country']=named_country.group(0)
-   if not str(original.get('city') or '').strip():
-    city=place[:named_country.start()].strip(' ,|-')
-    if 2<len(city)<85:original['city']=city
  cv=original.get('cv_for_matching') or original.get('cv_text_preview') or ''
- topics=_related_role_focus(cv)
- key_terms=_role_queries(cv,original.get('keywords'))
  original['cv_for_matching']=cv
- original['search_focus']='; '.join(key_terms[:3]) or '; '.join(topics)
- original['search_scope']='CV-backed employer jobs close to location plus hybrid/eligible remote'
+ if not str(original.get('country') or '').strip():
+  place=str((original.get('cv_details') or {}).get('location') or '')
+  detected=re.search(r'\b(Belgium|Netherlands|France|Germany|United Kingdom|'
+                     r'United States|Luxembourg|Switzerland|Ireland|Turkey|'
+                     r'Türkiye|Spain|Italy|Portugal|Poland|Canada)\b',place,re.I)
+  if detected:original['country']=detected.group()
+ focus=_role_queries(cv,original.get('keywords'))
+ original['search_focus']='; '.join(focus[:3]) or '; '.join(_related_role_focus(cv))
+ original['search_scope']='Source-backed CV-related roles, national and eligible remote'
  unique={};errors=[]
+ def merge(rows):
+  for job in rows:
+   link=job.get('url') or ''
+   if not _valid_public_link(link):continue
+   if job.get('published') and not _recent(job['published']):continue
+   # Do not let public web links with unrelated geography slip into the shortlist.
+   key=link.split('?')[0].rstrip('/').lower()
+   unique.setdefault(key,job)
+ merge(shared_jobs(DB,original.get('country')))
  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-  feeds=pool.submit(discover_feed_jobs,original)
-  web_future=(pool.submit(search_jobs,original,30)
-              if os.getenv('OPENAI_API_KEY') else None)
+  feeds_future=pool.submit(discover_feed_jobs,original)
+  ats_future=pool.submit(refresh_shared,DB,original)
   try:
-   jobs,feed_errors=feeds.result()
+   jobs,feed_errors=feeds_future.result()
    errors.extend(feed_errors)
-  except (requests.RequestException,ValueError,TypeError) as exc:
-   jobs=[];errors.append('feeds:'+type(exc).__name__)
-  for job in jobs:
-   if _valid_public_link(job.get('url','')):
-    unique.setdefault(job['url'].split('?')[0].rstrip('/').lower(),job)
-  if web_future:
-   try:
-    web_jobs=web_future.result()
-   except (requests.RequestException,ValueError,TypeError) as exc:
-    web_jobs=[];errors.append('web:'+type(exc).__name__)
-   for job in web_jobs:
-    if not _valid_public_link(job.get('url','')):continue
-    if job.get('published') and not _recent(job['published']):continue
-    country=str(original.get('country') or '').strip().lower()
-    listed=str(job.get('country') or '').strip().lower()
-    remote=any(x in (str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
-               for x in ('remote europe','remote anywhere','worldwide remote','remote within europe'))
-    if country and listed and country not in listed and not remote:continue
-    unique.setdefault(job['url'].split('?')[0].rstrip('/').lower(),job)
- # Second focused attempt only when both structured feeds and first web pass are thin.
- close=sum(1 for job in unique.values() if specialty_fit(job.get('title'),cv)
-           and (lexical_fit(job,cv)[0]>0
-                or len(tokenize(job.get('description','')) & tokenize(cv))>=3))
- if close<7 and os.getenv('OPENAI_API_KEY'):
-  fallback=dict(original,city='',search_focus='; '.join(key_terms[:4]) or '; '.join(topics),
-                search_scope='search nationwide, use alternative professional titles and nearby employers')
+   merge(jobs)
+  except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
+   errors.append('feeds:'+type(exc).__name__)
+  try:merge(ats_future.result())
+  except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
+   errors.append('ats:'+type(exc).__name__)
+ dna=original.get('career_dna') or career_dna(cv)
+ related=sum(1 for job in unique.values()
+             if specialty_fit(job.get('title'),cv)
+             and (lexical_fit(job,cv)[0]>=35 or role_similarity(job,dna)>=55))
+ # Existing billable web search is an optional fallback; skip it when the
+ # shared free sources already provide enough plausible CV-backed positions.
+ if related<16 and os.getenv('OPENAI_API_KEY'):
   try:
-   for job in search_jobs(fallback,30):
-    if not _valid_public_link(job.get('url','')):continue
-    if job.get('published') and not _recent(job['published']):continue
+   for job in search_jobs(original,30):
     country=str(original.get('country') or '').strip().lower()
     listed=str(job.get('country') or '').strip().lower()
-    remote=any(x in (str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
-               for x in ('remote europe','remote anywhere','worldwide remote','remote within europe'))
+    remote=any(word in (str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
+               for word in ('remote europe','remote anywhere','worldwide remote','remote within europe'))
     if country and listed and country not in listed and not remote:continue
-    unique.setdefault(job['url'].split('?')[0].rstrip('/').lower(),job)
+    merge([job])
   except (requests.RequestException,ValueError,TypeError) as exc:
-   errors.append('web-fallback:'+type(exc).__name__)
- app.logger.info('Search discovery summary: total=%s related=%s provider_errors=%s',
-                 len(unique),close,len(errors))
+   errors.append('web:'+type(exc).__name__)
+ app.logger.info('Shared discovery total=%s cv_related=%s errors=%s',
+                 len(unique),related,len(errors))
  return list(unique.values()),errors
 
 def get_run(uid,date=None):
@@ -428,9 +412,15 @@ def get_run(uid,date=None):
  with conn() as c:
   run=c.execute("SELECT * FROM daily_runs WHERE user_id=? AND local_day=? AND state='complete'",(uid,date)).fetchone()
   if not run:return None,[]
-  rows=c.execute("""SELECT j.*,r.fit score,r.matched_terms,r.position, CASE WHEN w.job_id IS NULL THEN 0 ELSE 1 END saved FROM run_jobs r JOIN jobs j ON j.id=r.job_id LEFT JOIN watchlist w ON w.job_id=j.id AND w.user_id=j.user_id WHERE r.run_id=? ORDER BY r.fit DESC, r.position ASC""",(run['id'],)).fetchall()
+  rows=c.execute("""SELECT j.*,r.fit score,r.matched_terms,r.position,
+       CASE WHEN w.job_id IS NULL THEN 0 ELSE 1 END saved
+   FROM run_jobs r JOIN jobs j ON j.id=r.job_id
+   LEFT JOIN watchlist w ON w.job_id=j.id AND w.user_id=j.user_id
+   WHERE r.run_id=? AND NOT EXISTS
+    (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
+   ORDER BY r.fit DESC,r.position ASC LIMIT 5""",(run['id'],)).fetchall()
   jobs=[dict(j) for j in rows]
-  for j in jobs:j['matched_terms']=json.loads(j['matched_terms'])
+  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
   return dict(run),jobs
 
 def run_search(uid):
