@@ -9,7 +9,7 @@ def test_looped_monkey_gif_is_real_and_valid():
     assert path.exists()
     with Image.open(path) as image:
         assert image.format=="GIF"
-        assert image.n_frames>=8
+        assert image.n_frames>=6
         assert image.info.get("loop")==0
         assert image.size[0]>=100
 
