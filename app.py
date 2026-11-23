@@ -247,6 +247,50 @@ def get_jobs(uid,watch_only=False):
  rows.sort(key=lambda x:(x['score'],x['published'] or ''),reverse=True)
  return rows
 
+def feedback_for(uid):
+ with conn() as c:
+  return [dict(r) for r in c.execute(
+   "SELECT url,title,company,created_at FROM job_feedback WHERE user_id=? ORDER BY created_at DESC LIMIT 80",(uid,))]
+
+def feedback_penalty(job,feedback):
+ title=tokenize(job.get('title'))
+ company=str(job.get('company') or '').lower()
+ url=str(job.get('url') or '')
+ largest=0
+ for row in feedback:
+  if url==row.get('url'):return 100
+  other=tokenize(row.get('title'))
+  similarity=len(title&other)/max(1,len(title|other))
+  if similarity>=.85:largest=max(largest,1.5)
+  elif similarity>=.65:largest=max(largest,.65)
+  if similarity>=.65 and company==str(row.get('company') or '').lower():
+   largest=max(largest,1.0)
+ return largest
+
+def preview_candidates(uid,max_results=5):
+ p=profile_for(uid)
+ if not p.get('has_cv'):return []
+ with conn() as c:
+  row=c.execute('SELECT cv_text FROM profiles WHERE user_id=?',(uid,)).fetchone()
+ cv=str(row['cv_text'] if row else '')[:14000]
+ feedback=feedback_for(uid)
+ dna=p.get('career_dna') or career_dna(cv)
+ selected=selected_languages(p.get('language'))
+ results=[]
+ for job in shared_jobs(DB,p.get('country'),650):
+  if not specialty_fit(job.get('title'),cv):continue
+  if feedback_penalty(job,feedback)>=100:continue
+  mandatory=required_languages(str(job.get('title') or '')+' '+str(job.get('description') or ''))
+  if selected and mandatory and not mandatory.issubset(selected):continue
+  fit,terms=lexical_fit(job,cv)
+  dna_fit=role_similarity(job,dna)
+  if fit<20 and dna_fit<45:continue
+  pref=score_job(job,p)[0]
+  score=round(max(1,min(9.8,.64*fit/10+.24*pref+.12*dna_fit/10-feedback_penalty(job,feedback))),1)
+  results.append(dict(job,score=score,matched_terms=terms))
+ results.sort(key=lambda item:item['score'],reverse=True)
+ return results[:max_results]
+
 def _parsed_date(value):
  if not value:return None
  try:
