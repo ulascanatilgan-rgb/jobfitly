@@ -88,7 +88,7 @@ def test_monkey_and_radar_and_pdf_back_controls_present():
     html=(root/"templates/index.html").read_text()
     js=(root/"static/app.js").read_text()
     css=(root/"static/style.css").read_text()
-    assert "monkey-rope-band" in html and "monkey-rope-line" in html
+    assert "monkey-rope-band" in html and "gibbon-rope-path" in html
     assert "monkey-traverse" in css and "monkey-swinging" in html
     assert "renderWorkStyleRadar" in js and "radar-surface" in js
     assert "job matching" in js and "20 responses" in js
