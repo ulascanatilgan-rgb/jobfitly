@@ -79,6 +79,8 @@ def test_fallback_search_reaches_remote_and_related_roles(monkeypatch):
         return []
     monkeypatch.setenv("OPENAI_API_KEY","test-only-not-real")
     monkeypatch.setattr(mod,"discover_feed_jobs",lambda profile:([],[]))
+    monkeypatch.setattr(mod,"shared_jobs",lambda *args,**kwargs:[])
+    monkeypatch.setattr(mod,"refresh_shared",lambda *args,**kwargs:[])
     monkeypatch.setattr(mod,"search_jobs",fake_search)
     results,errors=mod.fetch_candidates({
         "cv_for_matching":"Operations coordination and project management in banking with risk controls.",
