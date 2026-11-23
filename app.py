@@ -1,4 +1,4 @@
-import os, re, io, json, sqlite3, secrets, datetime, hmac, html, ipaddress, concurrent.futures
+import os, re, io, json, sqlite3, secrets, datetime, hmac, html, ipaddress, concurrent.futures, threading
 from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
 from pathlib import Path
@@ -101,6 +101,16 @@ def init_db():
   if 'cv_details' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
    c.execute("ALTER TABLE profiles ADD COLUMN cv_details TEXT NOT NULL DEFAULT '{}'")
 init_db()
+
+# Public employer inventories are prewarmed once on Railway boot using the
+# same 3-hour SQLite lease; no CVs or additional paid API calls are involved.
+def _warm_inventory_at_boot():
+ try:refresh_shared(DB,{})
+ except Exception as exc:
+  app.logger.warning('Public ATS cache warm-up unavailable: %s',type(exc).__name__)
+
+if os.getenv('RAILWAY_ENVIRONMENT'):
+ threading.Thread(target=_warm_inventory_at_boot,name='jobfitly-ats-warm',daemon=True).start()
 
 def today(): return datetime.datetime.now(ZoneInfo(os.getenv('APP_TIMEZONE','Europe/Brussels'))).date().isoformat()
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
