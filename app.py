@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import wraps
 from contextlib import contextmanager
 import requests
-from job_search import search_jobs
+from job_search import search_jobs, selected_languages, required_languages
 from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from cv_profile import extract_cv_details, is_plausible_person_name
@@ -403,7 +403,10 @@ def run_search(uid):
   raw,errors=fetch_candidates(p)
   # A specialized job without corresponding real CV history never passes.
   candidates=[]
+  allowed_languages=selected_languages(p.get('language'))
   for j in raw:
+   mandatory_languages=required_languages(str(j.get('title') or '')+' '+str(j.get('description') or ''))
+   if allowed_languages and mandatory_languages and not mandatory_languages.issubset(allowed_languages):continue
    if not specialty_fit(j.get('title'),p['cv_for_matching']):continue
    cv_fit,evidence=lexical_fit(j,p['cv_for_matching'])
    if cv_fit<56:
