@@ -54,7 +54,7 @@ async function reloadJobs(){const btn=$('run-button');if(btn){btn.disabled=true;
 function renderWatch(){const items=state.watch.map(j=>`<div class="saved-row"><div><div class="job-company">${esc(j.company)} <span class="accent">· ${j.score}/10 fit</span></div><h3>${esc(j.title)}</h3><p>${esc(j.city||j.country)}</p></div><div class="saved-actions"><button class="btn btn-light" onclick="removeSave(${j.id})">Remove</button><button class="btn btn-outline" onclick="openKit(${j.id},'motivation')">Generate motivations</button><button class="btn btn-dark" onclick="openKit(${j.id},'cv')">Update CV · PDF</button></div></div>`).join('');$('main-panel').innerHTML=`<div class="page-kicker">SAVED</div><h1 class="page-heading">My jobs<span class="accent">.</span></h1><div class="saved-list">${items||'<div class="empty-state"><h3>No saved jobs yet.</h3><button class="btn btn-dark" onclick="navigate(&quot;today&quot;)">Today’s 5</button></div>'}</div>`;}
 async function toggleSave(id,saved){try{await api('/api/watchlist/'+id,{method:saved?'DELETE':'POST'});await loadContent();state.screen==='today'?renderToday():renderWatch();notify(saved?'Removed from MyJobs.':'Added to MyJobs.')}catch(e){notify(e.message,true)}}
 function removeSave(id){toggleSave(id,true)}
-function showJob(id){let j=[...state.jobs,...state.watch].find(x=>x.id===id);if(!j)return;const overlay=document.createElement('div');overlay.id='detail-modal';overlay.className='modal-back';overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.innerHTML=`<div class="modal"><button class="close" aria-label="Close" onclick="$('detail-modal').remove()">×</button><div class="page-kicker">${esc(j.company)}</div><h2>${esc(j.title)}</h2><p>${esc(j.city)} · ${esc(j.country)} · ${j.score}/10 profile fit</p><div class="kit-banner"><strong>Why this matches</strong><p>${j.matched_terms?.length?'Your background and this listing share: '+j.matched_terms.map(esc).join(', ')+'.':'This posting has some relevance to your background and preferences; inspect the original listing before applying.'}</p></div><p style="max-height:220px;overflow:auto;white-space:pre-wrap">${esc(j.description||'No description available.')}</p>${['Himalayas','Jobicy','Arbeitnow'].includes(j.source)?`<p class="job-source-credit">Listing supplied by ${esc(j.source)}. <a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View source ↗</a></p>`:''}<div class="kit-actions">${j.url?`<a class="btn btn-dark" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View original listing ↗</a>`:'<span class="tag">Sample listing — no application link</span>'}<button class="btn btn-outline" onclick="$('detail-modal').remove();toggleSave(${j.id},${Boolean(j.saved)})">${j.saved?'Remove from saved':'+ MyJobs'}</button></div></div>`;document.body.appendChild(overlay)}
+function showJob(id){let j=[...state.jobs,...state.watch].find(x=>x.id===id);if(!j)return;const overlay=document.createElement('div');overlay.id='detail-modal';overlay.className='modal-back';overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.innerHTML=`<div class="modal"><button class="close" aria-label="Close" onclick="$('detail-modal').remove()">×</button><div class="page-kicker">${esc(j.company)}</div><h2>${esc(j.title)}</h2><p>${esc(j.city)} · ${esc(j.country)} · ${j.score}/10 profile fit</p><div class="kit-banner"><strong>Why this matches</strong><p>${j.matched_terms?.length?'Your background and this listing share: '+j.matched_terms.map(esc).join(', ')+'.':'This posting has some relevance to your background and preferences; inspect the original listing before applying.'}</p></div><p style="max-height:220px;overflow:auto;white-space:pre-wrap">${esc(j.description||'No description available.')}</p>${['Himalayas','Jobicy','Arbeitnow','Greenhouse','Lever','Ashby','Adzuna'].includes(j.source)?`<p class="job-source-credit">Listing supplied by ${esc(j.source)}. <a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View source ↗</a></p>`:''}<div class="kit-actions">${j.url?`<a class="btn btn-dark" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View original listing ↗</a>`:'<span class="tag">Sample listing — no application link</span>'}<button class="btn btn-outline" onclick="$('detail-modal').remove();toggleSave(${j.id},${Boolean(j.saved)})">${j.saved?'Remove from saved':'+ MyJobs'}</button></div></div>`;document.body.appendChild(overlay)}
 function renderWorkStyleRadar(answers={}){
  const dimensions=[
   {label:'Analysis',items:['analytical','detail']},
@@ -119,7 +119,7 @@ function renderPossibilityScore(profile){
    +'<strong class="possibility-number">'+value+'/100</strong></div>'
    +'<p class="possibility-note">'+esc(caption)+'</p></div>';
 }
-function renderCareerDNA(dna={}){
+function renderCareerDNA(dna={},feedbackCount=0){
  const families=(dna.role_families||[]).filter(x=>x&&x.name).slice(0,5);
  const skills=(dna.transferable_skills||[]).slice(0,9);
  const roles=families.map(x=>'<span class="dna-role" title="'+esc((x.evidence||[]).join(', '))+'">'+esc(x.name)+'</span>').join('');
@@ -128,7 +128,9 @@ function renderCareerDNA(dna={}){
   +'<p class="dna-intro">Documented strengths and related career directions identified from your CV.</p>'
   +'<h3>Career directions</h3><div class="dna-tags">'+(roles||'<span class="flow-muted">Upload a detailed CV to identify role families.</span>')+'</div>'
   +'<h3>Transferable skills</h3><div class="dna-tags">'+(badges||'<span class="flow-muted">No clear skill evidence identified yet.</span>')+'</div>'
-  +'<p class="dna-footnote">Evidence-based suggestions, not verified qualifications or guaranteed job matches.</p></section>';
+  +'<p class="dna-footnote">Evidence-based suggestions, not verified qualifications or guaranteed job matches.</p>'
+  +(feedbackCount?'<p class="dna-learning-note">JobFitly Learns · '+feedbackCount+' rejected role'+(feedbackCount===1?'':'s')+' remembered.</p>':'')
+  +'</section>';
 }
 function renderProfile(){
  const p=state.me.profile||{},d=p.cv_details||{};
@@ -143,7 +145,7 @@ function renderProfile(){
  +'<section class="profile-cv-facts"><h2>'+esc(d.name||'Name confirmation needed')+'</h2>'+nameNotice+confirmName
  +(rows||'<p class="flow-muted">Upload a readable CV to extract your details.</p>')+'</section>'
  +'<section class="profile-cv-facts"><h2>What you are looking for</h2><p>'+esc([p.city,p.country,p.language,...preferences].filter(Boolean).join(' · ')||'Set your job preferences.')+'</p></section>'
- +renderCareerDNA(p.career_dna||{})
+ +renderCareerDNA(p.career_dna||{},p.feedback_count||0)
  +'<section class="profile-cv-facts profile-work-style"><h2>Work style</h2>'+renderWorkStyleRadar(p.questions||{})+renderPossibilityScore(p)+'</section>'
  +'<p class="profile-small-note">Your CV remains the source of truth. Confirmed names are used consistently in both PDF documents.</p>'
  +'<button class="subtle-button" style="color:var(--plum)" onclick="deleteAccount()">Delete my account and data ↗</button>';
