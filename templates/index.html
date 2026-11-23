@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#ffffff"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="JobFitly"><meta name="description" content="JobFitly. Five jobs worth your time. Matched to who you are and what you want next."><title>JobFitly. — Jobs that fit you.</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/static/style.css?v=20261123a"><link rel="manifest" href="/static/manifest.webmanifest?v=20261121b"><link rel="apple-touch-icon" href="/static/jobfitly-logo.png"><link rel="icon" href="/static/favicon.svg" type="image/svg+xml"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#ffffff"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="JobFitly"><meta name="description" content="JobFitly. Five jobs worth your time. Matched to who you are and what you want next."><title>JobFitly. — Jobs that fit you.</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/static/style.css?v=20261123b"><link rel="manifest" href="/static/manifest.webmanifest?v=20261121b"><link rel="apple-touch-icon" href="/static/jobfitly-logo.png"><link rel="icon" href="/static/favicon.svg" type="image/svg+xml"></head><body>
 <div id="toast" class="toast" aria-live="polite"></div>
 <section id="landing" class="landing landing-clean">
 <header class="site-header landing-head landing-head-clean"><img class="brand-logo" alt="JobFitly." src="/static/jobfitly-logo.png"></header>
@@ -35,25 +35,24 @@
     <button type="button" class="flow-profile" onclick="navigate('profile')">Your profile <span aria-hidden="true">↗</span></button>
     <button type="button" class="flow-history" onclick="navigate('history')">History ↗</button><button type="button" class="flow-logout" onclick="logout()">Log out</button>
   </footer>
-  <div class="monkey-rope-band" aria-hidden="true">
-    <div class="monkey-rope-line"></div>
-    <div class="monkey-traveler">
-      <svg class="monkey-line-art" viewBox="0 0 90 68" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <g class="monkey-swinging">
-          <path class="monkey-arm" d="M28 38 Q18 31 22 17 L23 9 M49 38 Q54 24 58 10" stroke="#850d45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M19 9 Q22 5 25 10 M54 10 Q58 5 61 10" stroke="#171619" stroke-width="2.7" stroke-linecap="round"/>
-          <path class="monkey-tail" d="M56 50 C75 46 79 62 69 64 C61 66 58 60 63 56" stroke="#850d45" stroke-width="3" stroke-linecap="round"/>
-          <path class="monkey-torso" d="M34 36 C30 42 31 52 37 55 C45 58 52 52 49 43 L47 37" stroke="#850d45" stroke-width="2.8" stroke-linecap="round"/>
-          <circle cx="39" cy="27" r="11.5" stroke="#850d45" stroke-width="3"/>
-          <circle cx="28.3" cy="27" r="4.3" stroke="#850d45" stroke-width="2.6"/>
-          <circle cx="49.9" cy="27" r="4.3" stroke="#850d45" stroke-width="2.6"/>
-          <path d="M35 29 Q40 34 44 29" stroke="#171619" stroke-width="1.8" stroke-linecap="round"/>
-          <circle cx="36.5" cy="25.5" r="1.25" fill="#171619"/>
-          <circle cx="42.5" cy="25.5" r="1.25" fill="#171619"/>
-          <g class="monkey-legs">
-            <path d="M36 53 Q32 60 27 60 M46 54 Q49 61 55 59" stroke="#850d45" stroke-width="3" stroke-linecap="round"/>
-            <path d="M23 60 Q27 63 30 59 M52 59 Q55 62 59 59" stroke="#171619" stroke-width="2" stroke-linecap="round"/>
-          </g>
+  <div class="monkey-rope-band" id="monkey-rope-band" aria-hidden="true">
+    <svg class="gibbon-rope-svg" id="gibbon-rope" viewBox="0 0 1000 144" preserveAspectRatio="none">
+      <path id="gibbon-rope-path" d="M0 22 L1000 22" fill="none" stroke="#181719" stroke-width="1.55" stroke-linecap="round"/>
+    </svg>
+    <div class="gibbon-traveler" id="gibbon-traveler">
+      <svg class="gibbon-art" id="gibbon-art" viewBox="0 0 220 160" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <g class="gibbon-outline">
+          <path id="gibbon-left-arm"/>
+          <path id="gibbon-right-arm"/>
+          <path id="gibbon-torso"/>
+          <path id="gibbon-left-leg"/>
+          <path id="gibbon-right-leg"/>
+          <path id="gibbon-hip"/>
+          <path id="gibbon-head"/>
+          <path id="gibbon-muzzle"/>
+          <path id="gibbon-left-hand"/>
+          <path id="gibbon-right-hand"/>
+          <circle id="gibbon-eye" cx="128" cy="60" r="1.15" fill="#850d45" stroke="none"/>
         </g>
       </svg>
     </div>
@@ -61,4 +60,4 @@
   <span id="watch-counter" hidden aria-hidden="true">0</span>
 </section>
 <section id="onboarding" class="onboarding hidden"><header class="site-header"><img class="brand-logo" alt="JobFitly." src="/static/jobfitly-logo.png"><button class="link-button" onclick="logout()">Log out</button></header><div class="onboard-wrap"><div class="step-row"><span id="onboard-step-name">01 / THE BASICS</span><span id="onboard-step-count">1 of 3</span></div><div class="progress"><div id="progress-bar"></div></div><div id="onboard-content"></div><div class="onboard-buttons"><button id="step-back" class="btn btn-outline" onclick="stepBack()">← Back</button><button id="step-next" class="btn btn-dark" onclick="stepNext()">Continue →</button></div></div></section>
-<script src="/static/app.js?v=20261123a" defer></script><script src="/static/flow.js?v=20261122d" defer></script></body></html>
+<script src="/static/app.js?v=20261123a" defer></script><script src="/static/flow.js?v=20261122d" defer></script><script src="/static/monkey_motion.js?v=20261123b" defer></script></body></html>
