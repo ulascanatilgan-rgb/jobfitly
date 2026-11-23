@@ -157,7 +157,7 @@ def profile_for(uid):
  d['cv_details']=json.loads(d.get('cv_details') or '{}')
  try:dna=json.loads(d.get('career_dna') or '{}')
  except (ValueError,TypeError):dna={}
- if d['has_cv'] and not dna.get('role_families'):
+ if d['has_cv'] and not dna:
   dna=career_dna(d['cv_text'][:18000])
   with conn() as fix:fix.execute('UPDATE profiles SET career_dna=? WHERE user_id=?',(json.dumps(dna,ensure_ascii=False),uid))
  d['career_dna']=dna

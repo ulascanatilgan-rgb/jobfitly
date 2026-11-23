@@ -249,8 +249,12 @@ def refresh_shared(db,profile=None):
      [(j["url"][:1400],j["source"],j["title"],j["company"],j.get("city") or "",
        j.get("country") or "",j.get("description") or "",j.get("published") or "",
        j.get("location_label") or "",j.get("external_id") or "",ts) for j in gathered])
-  con.execute("UPDATE shared_refresh SET lease_until=0,last_success=? WHERE source='ats'",
-              (ts if success else 0,))
+  # A failed provider wave backs off for 10 minutes instead of hammering
+  # every public employer API on each new user's next search.
+  if success:
+   con.execute("UPDATE shared_refresh SET lease_until=0,last_success=? WHERE source='ats'",(ts,))
+  else:
+   con.execute("UPDATE shared_refresh SET lease_until=? WHERE source='ats'",(ts+600,))
   con.execute("DELETE FROM shared_jobs WHERE fetched_at<?",(ts-MAX_STALE_SECONDS,))
   con.commit()
  finally:con.close()
