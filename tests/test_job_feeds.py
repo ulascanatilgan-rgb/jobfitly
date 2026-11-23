@@ -78,3 +78,58 @@ def test_cv_queries_do_not_include_identity():
     queries=job_feeds._role_queries(cv)
     assert "risk" in queries
     assert all("alex" not in q.lower() and "@" not in q and "+32" not in q for q in queries)
+
+
+def test_full_search_survives_openai_outage_with_five_real_feed_jobs(monkeypatch,tmp_path):
+    import app
+    import requests
+    monkeypatch.setattr(app,"DB",tmp_path/"resilient.sqlite3")
+    app.init_db()
+    with app.conn() as c:
+        uid=c.execute("INSERT INTO users(email,password_hash,created_at) VALUES(?,?,?)",
+                      ("demo@example.org","hash",app.now())).lastrowid
+        c.execute("INSERT INTO profiles(user_id,cv_name,cv_text,questions,swipes,updated_at) VALUES(?,?,?,?,?,?)",
+                  (uid,"sample.txt",
+                   "Taylor Morgan\nOperations Manager\nOperations process controls, cross-functional "
+                   "stakeholder planning, management reporting, audit, project coordination, "
+                   "risk processes and business operations.", "{}", "{}", app.now()))
+    fake=[]
+    for index in range(8):
+        fake.append({"external_id":f"jobicy:{index}","title":"Operations Manager",
+                     "company":f"Employer {index}","city":"Remote","country":"Europe",
+                     "description":"Operations management, risk process controls, "
+                                   "project coordination and reporting.",
+                     "url":f"https://jobicy.com/jobs/operations-manager-{index}",
+                     "published":app.now(),"source":"Jobicy"})
+    monkeypatch.setattr(app,"discover_feed_jobs",lambda profile:(fake,[]))
+    def no_web(*args,**kwargs):
+        raise requests.Timeout("Simulated failure")
+    monkeypatch.setattr(app,"search_jobs",no_web)
+    monkeypatch.setenv("OPENAI_API_KEY","synthetic-fixture-only")
+    monkeypatch.setattr(app,"ai_cv_fit",lambda *args,**kwargs:{})
+    assert app.run_search(uid)==(5,None,200)
+    _,jobs=app.get_run(uid)
+    assert len(jobs)==5 and all("jobicy.com" in j["url"] for j in jobs)
+
+
+def test_abandoned_search_is_recoverable(monkeypatch,tmp_path):
+    import app
+    monkeypatch.setattr(app,"DB",tmp_path/"interrupted.sqlite3")
+    app.init_db()
+    earlier=(datetime.datetime.now(datetime.timezone.utc)-
+             datetime.timedelta(minutes=9)).isoformat()
+    with app.conn() as c:
+        uid=c.execute("INSERT INTO users(email,password_hash,created_at) VALUES(?,?,?)",
+                      ("again@example.org","hash",app.now())).lastrowid
+        c.execute("INSERT INTO profiles(user_id,cv_name,cv_text,updated_at) VALUES(?,?,?,?)",
+                  (uid,"sample.txt",
+                   "Operations Manager. Cross-functional business operations and risk, "
+                   "program coordination with stakeholder engagement, financial reporting.",app.now()))
+        c.execute("INSERT INTO daily_runs(user_id,local_day,run_at,state) VALUES(?,?,?,?)",
+                  (uid,app.today(),earlier,"working"))
+    monkeypatch.setattr(app,"fetch_candidates",lambda profile:([],[]))
+    result=app.run_search(uid)
+    assert result[2]==422
+    assert "source-backed" in result[1]
+    with app.conn() as c:
+        assert c.execute("SELECT COUNT(*) FROM daily_runs").fetchone()[0]==0
