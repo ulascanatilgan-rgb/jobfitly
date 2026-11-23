@@ -127,7 +127,7 @@ def verified_cv_details(uid, require_name=False):
   if fresh!=stored or str(row['name'] or '')!=name:
    c.execute('UPDATE profiles SET cv_details=?,name=?,updated_at=? WHERE user_id=?',
      (json.dumps(fresh,ensure_ascii=False),name,now(),uid))
-   if prior!=name or str(row['name'] or '')!=name:
+   if (prior and prior!=name) or str(row['name'] or '')!=name:
     c.execute('DELETE FROM kits WHERE user_id=?',(uid,))
   if require_name and not name:
    raise ValueError('We could not confidently identify your name in the uploaded CV. Please confirm it in Your profile.')
