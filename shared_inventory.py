@@ -26,7 +26,7 @@ BOARD_SEEDS={
           ("granular-energy.com","Granular Energy")],
 }
 TTL_SECONDS=3*3600
-MAX_STALE_SECONDS=48*3600
+MAX_STALE_SECONDS=24*3600
 LEASE_SECONDS=100
 HTTP_TIMEOUT=(2.5,7)
 HEADERS={"Accept":"application/json","User-Agent":"JobFitly public career listings (respectful 3h cache)"}
@@ -158,13 +158,16 @@ def shared_jobs(db,country="",max_rows=700):
  try:
   prepare_inventory(con)
   cutoff=int(time.time())-MAX_STALE_SECONDS
+  # Filter by eligibility *before* applying the display cap; otherwise large
+  # overseas boards can displace all local Belgian/other-country vacancies.
   rows=con.execute("""SELECT * FROM shared_jobs WHERE fetched_at>=?
-   ORDER BY fetched_at DESC LIMIT ?""",(cutoff,min(2000,int(max_rows)))).fetchall()
+   ORDER BY fetched_at DESC LIMIT 5000""",(cutoff,)).fetchall()
   jobs=[]
   for row in rows:
    job=dict(row)
    if not _country_matches(job,country):continue
    jobs.append(job)
+   if len(jobs)>=max_rows:break
   return jobs
  finally:con.close()
 
