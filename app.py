@@ -636,6 +636,37 @@ def run_jobs():
  if error:return jsonify(error=error),status
  return jsonify(ok=True,count=count)
 
+@app.get('/api/jobs/preview')
+@auth_required
+def jobs_preview():
+ """Instant shortlist from last shared ATS refresh while full search continues."""
+ items=preview_candidates(session['uid'])
+ return jsonify(jobs=items,provisional=True,updated_from='shared_employer_boards')
+
+@app.post('/api/jobs/<int:job_id>/not-for-me')
+@auth_required
+def not_for_me(job_id):
+ uid=session['uid']
+ with conn() as c:
+  item=c.execute('SELECT id,url,title,company FROM jobs WHERE id=? AND user_id=?',(job_id,uid)).fetchone()
+  if not item:return jsonify(error='Job not found.'),404
+  c.execute("""INSERT INTO job_feedback(user_id,job_id,url,title,company,created_at)
+    VALUES(?,?,?,?,?,?)
+    ON CONFLICT(user_id,url) DO UPDATE SET created_at=excluded.created_at""",
+    (uid,item['id'],item['url'],item['title'],item['company'],now()))
+  c.execute('DELETE FROM watchlist WHERE user_id=? AND job_id=?',(uid,job_id))
+ return jsonify(ok=True,jobs=get_run(uid)[1],learned=True)
+
+@app.delete('/api/jobs/<int:job_id>/not-for-me')
+@auth_required
+def undo_not_for_me(job_id):
+ uid=session['uid']
+ with conn() as c:
+  row=c.execute('SELECT url FROM jobs WHERE id=? AND user_id=?',(job_id,uid)).fetchone()
+  if not row:return jsonify(error='Job not found.'),404
+  c.execute('DELETE FROM job_feedback WHERE user_id=? AND url=?',(uid,row['url']))
+ return jsonify(ok=True,jobs=get_run(uid)[1])
+
 @app.post('/api/jobs/reset')
 @auth_required
 def reset_my_matches():
