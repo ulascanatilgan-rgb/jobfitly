@@ -66,6 +66,34 @@ def _safe_cv_excerpt(profile):
     return text
 
 
+SUPPORTED_LANGUAGES={"english","dutch","french","german","spanish","italian","portuguese","turkish"}
+
+def selected_languages(value):
+    """Legacy single value and multi-language comma-separated profile field."""
+    if isinstance(value,(list,tuple,set)):
+        chunks=[str(v) for v in value]
+    else:
+        chunks=re.split(r"[,;|]",str(value or ""))
+    return {chunk.strip().lower() for chunk in chunks if chunk.strip().lower() in SUPPORTED_LANGUAGES}
+
+def required_languages(value):
+    """Recognize explicit language requirements in a posting, not casual mentions."""
+    text=str(value or "").lower()
+    patterns={
+        "english":r"english|engels|anglais",
+        "dutch":r"dutch|nederlands|néerlandais",
+        "french":r"french|français|frans",
+        "german":r"german|deutsch|duits|allemand",
+        "spanish":r"spanish|español|spaans",
+        "italian":r"italian|italiano|italiaans",
+        "portuguese":r"portuguese|português|portugees",
+        "turkish":r"turkish|türkçe|turks",
+    }
+    must=r"required|mandatory|fluent|native|excellent|must speak|must have|verplicht|vereist|obligatoire|courant"
+    return {language for language,words in patterns.items()
+            if re.search(rf"(?:{must}).{0,35}\b(?:{words})\b",text)
+            or re.search(rf"\b(?:{words})\b.{0,35}(?:{must})",text)}
+
 def search_jobs(profile, max_age_days=14):
     """Return candidates; app performs link/date/location checks and scoring."""
     key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -76,7 +104,7 @@ def search_jobs(profile, max_age_days=14):
     criteria = {
         "country": str(profile.get("country") or "")[:90],
         "city": str(profile.get("city") or "")[:90],
-        "language": str(profile.get("language") or "English")[:60],
+        "languages": sorted(selected_languages(profile.get("language"))),
         "keywords": str(profile.get("keywords") or "")[:240],
         "preferences": profile.get("swipes") or {},
         "self_ratings": profile.get("questions") or {},
@@ -164,17 +192,10 @@ def search_jobs(profile, max_age_days=14):
             continue
         if published and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
             continue
-        language = str(profile.get("language") or "English").strip().lower()
-        if language == "english":
-            # A stated compulsory local-language requirement is a hard constraint.
-            role_text = (title + " " + description).lower()
-            if any(phrase in role_text for phrase in (
-                "fluent dutch required", "dutch is mandatory", "native dutch",
-                "dutch language required", "excellent dutch required",
-                "fluent french required", "french is mandatory", "native french",
-                "french language required"
-            )):
-                continue
+        languages = selected_languages(profile.get("language"))
+        mandatory = required_languages(title + " " + description)
+        if languages and mandatory and not mandatory.issubset(languages):
+            continue
         seen.add(identity)
         output.append({
             "external_id": "openai:" + url[:450],
