@@ -158,9 +158,11 @@ def profile_for(uid):
  try:dna=json.loads(d.get('career_dna') or '{}')
  except (ValueError,TypeError):dna={}
  if d['has_cv'] and not dna.get('role_families'):
-  dna=career_dna(d['cv_text_preview'])
+  dna=career_dna(d['cv_text'][:18000])
   with conn() as fix:fix.execute('UPDATE profiles SET career_dna=? WHERE user_id=?',(json.dumps(dna,ensure_ascii=False),uid))
  d['career_dna']=dna
+ with conn() as count:
+  d['feedback_count']=count.execute('SELECT COUNT(*) FROM job_feedback WHERE user_id=?',(uid,)).fetchone()[0]
  d['name']=d['cv_details'].get('name','')
  d['name_needs_confirmation']=d['has_cv'] and not bool(d['name'])
  d.pop('cv_text')
@@ -369,7 +371,9 @@ def fetch_candidates(profile):
   for job in rows:
    link=job.get('url') or ''
    if not _valid_public_link(link):continue
-   if job.get('published') and not _recent(job['published']):continue
+   # Employer ATS feeds list currently published vacancies. Their first
+   # publication dates can be older than 30 days without implying closure.
+   if job.get('source') not in {'Greenhouse','Lever','Ashby'} and job.get('published') and not _recent(job['published']):continue
    # Do not let public web links with unrelated geography slip into the shortlist.
    key=link.split('?')[0].rstrip('/').lower()
    unique.setdefault(key,job)
