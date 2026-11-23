@@ -63,15 +63,16 @@ function renderWorkStyleRadar(answers={}){
    return entries.length?entries.reduce((sum,key)=>sum+Number(answers[key]),0)/entries.length:5;
  });
  const answered=Object.keys(answers||{}).length;
- const cx=190,cy=178,radius=112;
+ const cx=200,cy=163,radius=108;
  const location=(index,magnitude)=>{const theta=-Math.PI/2+index*Math.PI/4;return [cx+radius*magnitude*Math.cos(theta),cy+radius*magnitude*Math.sin(theta)]};
  const coords=pts=>pts.map(([x,y])=>x.toFixed(1)+','+y.toFixed(1)).join(' ');
  const grid=[.25,.5,.75,1].map(level=>'<polygon class="radar-grid-ring" points="'+coords(dimensions.map((_,i)=>location(i,level)))+'"/>').join('');
  const axes=dimensions.map((_,i)=>{const [x,y]=location(i,1);return '<line class="radar-axis" x1="'+cx+'" y1="'+cy+'" x2="'+x+'" y2="'+y+'"/>'}).join('');
  const labels=dimensions.map((dim,i)=>{
-   const [x,y]=location(i,1.29);
+   const [px,y]=location(i,1.12);
+   const x=i===6?Math.max(90,px):px;
    const anchor=x<cx-14?'end':x>cx+14?'start':'middle';
-   return '<text class="radar-label" x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="'+anchor+'">'+esc(dim.label)+'</text>';
+   return '<text class="radar-label" x="'+x.toFixed(1)+'" y="'+(y+3).toFixed(1)+'" text-anchor="'+anchor+'">'+esc(dim.label)+'</text>';
  }).join('');
  const filled=coords(dimensions.map((_,i)=>location(i,values[i]/10)));
  const vertices=dimensions.map((_,i)=>{
@@ -81,13 +82,34 @@ function renderWorkStyleRadar(answers={}){
  const summary=dimensions.map((dim,i)=>dim.label+': '+values[i].toFixed(1)+'/10').join(', ');
  return '<div class="radar-wrap">'
   +'<div class="radar-intro"><span>YOUR WORK STYLE</span><strong>'+answered+' / 20 responses</strong></div>'
-  +'<svg class="work-radar" viewBox="0 0 380 354" role="img" aria-label="'+esc(summary)+'">'
+  +'<svg class="work-radar" viewBox="0 0 400 338" role="img" aria-label="'+esc(summary)+'">'
   +'<g>'+grid+axes+'</g>'+labels
   +(answered?'<polygon class="radar-surface" points="'+filled+'"/>'+vertices:'')
   +'<circle class="radar-center" cx="'+cx+'" cy="'+cy+'" r="2.5"/>'
   +'</svg>'
   +'<p class="radar-caption">'+(answered?'An illustrative view of how you prefer to work.':'Complete Tell about yourself to draw your work-style profile.')+' It does not change your job matching.</p>'
   +'</div>';
+}
+function jobPossibilityScore(profile){
+ const p=profile||{},cv=String(p.cv_text_preview||'').trim();
+ const cvPoints=p.has_cv?5+Math.min(4,Math.floor(cv.length/650)):0;
+ const answered=Object.values(p.questions||{}).filter(v=>v!==null&&v!==''&&Number.isFinite(Number(v))).length;
+ const stylePoints=Math.round(4*Math.min(20,answered)/20);
+ const prefs=[p.city,p.country,p.language,p.keywords,...Object.values(p.swipes||{})].filter(v=>v!=null&&String(v).trim()).length;
+ const preferencePoints=Math.min(4,prefs);
+ const observed=(state.jobs||[]).map(j=>Number(j.score)).filter(n=>Number.isFinite(n)&&n>0);
+ const marketPoints=observed.length?Math.min(3,Math.round(Math.max(...observed)*.3)):0;
+ return Math.max(80,Math.min(100,80+cvPoints+stylePoints+preferencePoints+marketPoints));
+}
+function renderPossibilityScore(profile){
+ const value=jobPossibilityScore(profile);
+ const caption=(state.jobs||[]).length
+   ?'Illustrative profile readiness based on your CV, preferences and available job matches. Not a hiring probability.'
+   :'Illustrative profile readiness based on your CV and preferences. Market matches are included after a search; not a hiring probability.';
+ return '<div class="possibility-wrap"><div class="possibility-pills" aria-label="Job Possibility Score '+value+' out of 100">'
+   +'<span class="possibility-label">Job Possibility Score</span>'
+   +'<strong class="possibility-number">'+value+'/100</strong></div>'
+   +'<p class="possibility-note">'+esc(caption)+'</p></div>';
 }
 function renderProfile(){
  const p=state.me.profile||{},d=p.cv_details||{};
@@ -102,7 +124,7 @@ function renderProfile(){
  +'<section class="profile-cv-facts"><h2>'+esc(d.name||'Name confirmation needed')+'</h2>'+nameNotice+confirmName
  +(rows||'<p class="flow-muted">Upload a readable CV to extract your details.</p>')+'</section>'
  +'<section class="profile-cv-facts"><h2>What you are looking for</h2><p>'+esc([p.city,p.country,p.language,...preferences].filter(Boolean).join(' · ')||'Set your job preferences.')+'</p></section>'
- +'<section class="profile-cv-facts profile-work-style"><h2>Work style</h2>'+renderWorkStyleRadar(p.questions||{})+'</section>'
+ +'<section class="profile-cv-facts profile-work-style"><h2>Work style</h2>'+renderWorkStyleRadar(p.questions||{})+renderPossibilityScore(p)+'</section>'
  +'<p class="profile-small-note">Your CV remains the source of truth. Confirmed names are used consistently in both PDF documents.</p>'
  +'<button class="subtle-button" style="color:var(--plum)" onclick="deleteAccount()">Delete my account and data ↗</button>';
 }
