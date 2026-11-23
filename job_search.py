@@ -91,8 +91,8 @@ def required_languages(value):
     }
     must=r"required|mandatory|fluent|native|excellent|must speak|must have|verplicht|vereist|obligatoire|courant"
     return {language for language,words in patterns.items()
-            if re.search(rf"(?:{must}).{0,35}\b(?:{words})\b",text)
-            or re.search(rf"\b(?:{words})\b.{0,35}(?:{must})",text)}
+            if re.search(rf"(?:{must}).{{0,35}}\b(?:{words})\b",text)
+            or re.search(rf"\b(?:{words})\b.{{0,35}}(?:{must})",text)}
 
 def search_jobs(profile, max_age_days=14):
     """Return candidates; app performs link/date/location checks and scoring."""
