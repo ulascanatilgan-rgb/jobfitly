@@ -85,26 +85,52 @@
   };
   reloadJobs=async function(){
     var btn=$("run-button");
-    if(btn&&btn.disabled)return;
-    if(btn){
-      btn.disabled=true;btn.setAttribute("aria-busy","true");
-      btn.innerHTML='<span class="find-hourglass-inline" aria-hidden="true">⌛</span> Searching…';
-      var loader=document.createElement("div");
-      loader.id="find-progress";loader.className="find-progress";loader.setAttribute("role","status");
-      loader.setAttribute("aria-live","polite");
-      loader.innerHTML='<svg class="find-hourglass-svg" viewBox="0 0 42 50" aria-hidden="true" focusable="false">'
-        +'<path class="find-hg-frame" d="M9 5H33M9 45H33M12 7V14C12 21 17 22 21 25C25 28 30 29 30 36V43M30 7V14C30 21 25 22 21 25C17 28 12 29 12 36V43"/>'
-        +'<path class="find-hg-sand-top" d="M15 14H27Q26 18 21 22Q16 18 15 14Z"/>'
-        +'<path class="find-hg-sand-bottom" d="M21 30Q16 35 15 39H27Q26 35 21 30Z"/>'
-        +'<path class="find-hg-stream" d="M21 25V31"/></svg>'
-        +'<div class="find-progress-copy"><strong>Finding the right opportunities</strong><span>Researching current vacancies and matching them with your CV…</span></div>';
-      btn.insertAdjacentElement("afterend",loader);
+    if(!btn||btn.disabled)return;
+    btn.disabled=true;btn.setAttribute("aria-busy","true");
+    btn.innerHTML='<span class="find-hourglass-inline" aria-hidden="true">⌛</span> Searching…';
+    var loader=document.createElement("div");
+    loader.id="find-progress";loader.className="find-progress";
+    loader.setAttribute("role","status");loader.setAttribute("aria-live","polite");
+    loader.innerHTML='<svg class="find-hourglass-svg" viewBox="0 0 42 50" aria-hidden="true" focusable="false">'
+      +'<path class="find-hg-frame" d="M9 5H33M9 45H33M12 7V14C12 21 17 22 21 25C25 28 30 29 30 36V43M30 7V14C30 21 25 22 21 25C17 28 12 29 12 36V43"/>'
+      +'<path class="find-hg-sand-top" d="M15 14H27Q26 18 21 22Q16 18 15 14Z"/>'
+      +'<path class="find-hg-sand-bottom" d="M21 30Q16 35 15 39H27Q26 35 21 30Z"/>'
+      +'<path class="find-hg-stream" d="M21 25V31"/></svg>'
+      +'<div class="find-progress-copy"><strong>Finding the right opportunities</strong>'
+      +'<span>Matching current vacancies to your CV and preferences…</span></div>';
+    btn.insertAdjacentElement("afterend",loader);
+    var previewPanel=document.createElement("div");
+    previewPanel.id="find-preview";previewPanel.className="find-preview";
+    loader.insertAdjacentElement("afterend",previewPanel);
+    var lastPreview="",finished=false;
+    async function showEarlyMatches(){
+      if(finished||!document.getElementById("find-preview"))return;
+      try{
+        var data=await api("/api/jobs/preview");
+        if(finished||!document.getElementById("find-preview"))return;
+        var jobs=(data.jobs||[]).slice(0,5);
+        var signature=jobs.map(function(j){return j.url}).join("|");
+        if(!jobs.length||signature===lastPreview)return;
+        lastPreview=signature;
+        previewPanel.innerHTML='<p class="preview-label">Early matches · final ranking in progress</p>'
+          +jobs.map(function(j){
+            return '<div class="preview-job"><div><strong>'+esc(j.title)+'</strong>'
+              +'<small>'+esc(j.company)+' · '+esc(j.city||j.country||'Location to verify')+'</small></div>'
+              +'<a href="'+esc(j.url)+'" target="_blank" rel="noopener noreferrer">View ↗</a></div>';
+          }).join('');
+      }catch(err){/* The full search continues even if preview fails. */}
     }
+    var previewPoll=setInterval(showEarlyMatches,3200);
+    showEarlyMatches();
     try{
       var result=await api("/api/jobs/run",{method:"POST"});
+      finished=true;clearInterval(previewPoll);
       await loadContent();navigate("results");
       notify(result.count+" matching role"+(result.count===1?"":"s")+" found.");
-    }catch(err){notify(err.message,true);renderFlowResults();crumb("results");}
+    }catch(err){
+      finished=true;clearInterval(previewPoll);
+      notify(err.message,true);renderFlowResults();crumb("results");
+    }
   };
   document.addEventListener("visibilitychange",async function(){
     if(document.visibilityState!=="visible"||!state.me)return;
