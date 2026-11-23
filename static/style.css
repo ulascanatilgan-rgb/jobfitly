@@ -616,3 +616,26 @@ body{font-size:13px}
 @media(prefers-reduced-motion:reduce){
   .gibbon-traveler{will-change:auto}
 }
+
+/* Lightweight, reference-derived animated GIF; independently glides across the footer. */
+.flow-shell{padding-bottom:145px}
+.monkey-rope-band{height:133px;bottom:0;overflow:hidden;position:fixed;pointer-events:none;background:#fff}
+.monkey-rope-band .monkey-rope-line{position:absolute;left:0;right:0;top:15px;height:1.7px;background:#171619}
+.monkey-rope-band .monkey-traveler{
+  position:absolute;left:0;top:6px;width:148px;height:115px;
+  animation:monkey-gif-cross 19s linear infinite;will-change:transform
+}
+.monkey-gif{width:148px;height:115px;object-fit:contain;display:block}
+@keyframes monkey-gif-cross{
+  0%{transform:translate3d(-170px,0,0)}
+  100%{transform:translate3d(calc(100vw + 170px),0,0)}
+}
+@media(max-width:600px){
+ .flow-shell{padding-bottom:123px}
+ .monkey-rope-band{height:118px}
+ .monkey-rope-band .monkey-rope-line{top:15px}
+ .monkey-rope-band .monkey-traveler{animation-duration:17s}
+}
+@media(prefers-reduced-motion:reduce){
+ .monkey-rope-band .monkey-traveler{animation:none!important;transform:translate3d(40vw,0,0)}
+}
