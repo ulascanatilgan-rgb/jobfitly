@@ -712,7 +712,11 @@ def download_kit(job_id,kind):
   return jsonify(error='The document could not be formatted as a PDF. Please regenerate the draft and try again.'),422
  safe=re.sub(r'[^a-zA-Z0-9_-]+','_',r['company'])[:45]
  buf=io.BytesIO(data)
- return send_file(buf,as_attachment=True,download_name=f'JobFitly_{kind}_{safe}_{job_id}.pdf',mimetype='application/pdf')
+ preview=request.args.get('view')=='1'
+ response=send_file(buf,as_attachment=not preview,download_name=f'JobFitly_{kind}_{safe}_{job_id}.pdf',mimetype='application/pdf')
+ response.headers['Cache-Control']='private, no-store'
+ response.headers['X-Content-Type-Options']='nosniff'
+ return response
 
 @app.post('/api/account/delete')
 @auth_required
