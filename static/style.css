@@ -700,3 +700,32 @@ body{font-size:13px}
  .landing-clean .hero-clean-description.reveal-4,.landing-clean .hero-word{animation:none!important;opacity:1!important}
  .find-hourglass-svg,.find-hg-sand-top,.find-hg-sand-bottom,.find-hg-stream,.find-hourglass-inline{animation:none!important}
 }
+
+
+/* JobFitly Learns: compact, discreet rejection action alongside saved jobs. */
+.job-feedback-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:7px}
+.not-for-me{border:1px solid #850d45;border-radius:999px;background:#850d45;color:white;
+ font-size:9px;font-weight:700;line-height:1.2;padding:6px 9px;cursor:pointer;white-space:nowrap}
+.not-for-me:hover{background:#690634;border-color:#690634}
+.not-for-me:focus-visible{outline:2px solid #850d45;outline-offset:3px}
+/* First cache shortlist appears while fresh ATS and source validation finish. */
+.find-preview{max-width:610px;margin:10px auto 16px;padding:0 3px}
+.preview-label{font-size:10px;font-weight:700;color:#850d45;margin:14px 0 10px;letter-spacing:.02em}
+.preview-job{display:flex;align-items:center;justify-content:space-between;gap:12px;
+ border-top:1px solid #e9e3e6;padding:10px 4px}
+.preview-job strong{display:block;color:#1d191b;font-size:11px;line-height:1.45}
+.preview-job small{display:block;color:#888087;font-size:10px;line-height:1.5;margin-top:3px}
+.preview-job a{color:#850d45;font-size:10px;text-decoration:underline;white-space:nowrap}
+/* Visible Career DNA: source-grounded role families and skills, not AI-generated claims. */
+.career-dna .dna-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.career-dna .dna-heading h2{margin-bottom:0}
+.career-dna .dna-heading span{font-size:9px;color:#8a8287;white-space:nowrap}
+.career-dna .dna-intro{font-size:11px;color:#696169;line-height:1.6;margin:10px 0 20px}
+.career-dna h3{font-size:10px;font-weight:750;color:#272025;letter-spacing:.015em;margin:15px 0 9px}
+.career-dna .dna-tags{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.career-dna .dna-role,.career-dna .dna-skill{display:inline-flex;padding:7px 10px;
+ border-radius:999px;font-size:10px;font-weight:650;line-height:1.4}
+.career-dna .dna-role{color:#fff;background:#850d45}
+.career-dna .dna-skill{color:#252124;background:#f3f0f1;border:1px solid #e6e1e4}
+.career-dna .dna-footnote{font-size:9px;color:#90898d;line-height:1.5;margin:15px 0 2px}
+@media(max-width:420px){.job-bottom{gap:7px;flex-wrap:wrap}.not-for-me{font-size:9px;padding:6px 8px}}
