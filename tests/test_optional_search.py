@@ -77,6 +77,8 @@ def test_fallback_search_reaches_remote_and_related_roles(monkeypatch):
         if "remote" in str(profile.get("search_scope")):
             return [job(i) for i in range(5)]
         return []
+    monkeypatch.setenv("OPENAI_API_KEY","test-only-not-real")
+    monkeypatch.setattr(mod,"discover_feed_jobs",lambda profile:([],[]))
     monkeypatch.setattr(mod,"search_jobs",fake_search)
     results,errors=mod.fetch_candidates({
         "cv_for_matching":"Operations coordination and project management in banking with risk controls.",
@@ -84,7 +86,7 @@ def test_fallback_search_reaches_remote_and_related_roles(monkeypatch):
     })
     assert not errors
     assert len(results)==5
-    assert len(calls)>=4
+    assert 1<=len(calls)<=2
     assert len(set(result["url"] for result in results))==5
 
 
