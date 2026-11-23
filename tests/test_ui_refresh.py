@@ -23,7 +23,7 @@ def test_mobile_photo_and_pwa():
     html=(base/'templates/index.html').read_text()
     css=(base/'static/style.css').read_text()
     js=(base/'static/app.js').read_text()
-    assert 'hero-mobile-portrait' in html and 'jobfitly-executive-hero.avif' in css
+    assert 'hero-mobile-portrait' in html and 'jobfitly-executive-20261123.avif' in css
     assert 'manifest.webmanifest' in html and 'apple-touch-icon' in html
     assert 'auth-remember' in html and 'remember:' in js
     assert 'hero-word' in css and 'buildHeroWordReveal' in js

@@ -81,9 +81,9 @@ def test_five_step_page_and_updated_portrait_file():
     html=(base/"templates"/"index.html").read_text()
     js=(base/"static"/"flow.js").read_text()
     assert 'flow-app-header' in html
-    assert 'jobfitly-executive-hero.avif' in html
-    assert (base/"static"/"jobfitly-executive-hero.avif").is_file()
-    assert (base/"static"/"jobfitly-executive-hero.avif").read_bytes()[4:12]==b"ftypavif"
+    assert 'jobfitly-executive-20261123.avif' in html
+    assert (base/"static"/"jobfitly-executive-20261123.avif").is_file()
+    assert (base/"static"/"jobfitly-executive-20261123.avif").read_bytes()[4:12]==b"ftypavif"
     assert js.count('id:"')==5
     for title in (
         "Upload your CV","Tell about yourself","What you search",
