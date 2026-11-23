@@ -6,6 +6,7 @@ from functools import wraps
 from contextlib import contextmanager
 import requests
 from job_search import search_jobs
+from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from cv_profile import extract_cv_details, is_plausible_person_name
 from pdf_documents import motivation_pdf, tailored_cv_pdf as detailed_cv_pdf
@@ -289,15 +290,17 @@ def _related_role_focus(cv_text):
  return [focus for keywords,focus in categories if any(re.search(r'\b'+re.escape(w)+r'\b',cv) for w in keywords)][:4]
 
 def fetch_candidates(profile):
- """Progressive source-grounded vacancy search. Blank preferences are neutral."""
+ """Collect job-board APIs and one focused live-web search simultaneously.
+
+ Prefer source-verified structured feeds to prevent 'zero results' whenever
+ OpenAI web citations are sparse. Profile preferences are strictly optional.
+ """
  original=dict(profile)
- # When a new user leaves geography empty, use only explicit location from the CV.
- # Never mistake the signup form's sample placeholders for user preferences.
  place=str((original.get('cv_details') or {}).get('location') or '')
  if not str(original.get('country') or '').strip() and place:
   named_country=re.search(r'\b(Belgium|Netherlands|France|Germany|Italy|Spain|Portugal|'
-                          r'Luxembourg|Switzerland|Ireland|Turkey|Türkiye|Canada|'
-                          r'United Kingdom|United States)\b',place,re.I)
+                         r'Luxembourg|Switzerland|Ireland|Turkey|Türkiye|Canada|'
+                         r'United Kingdom|United States)\b',place,re.I)
   if named_country:
    original['country']=named_country.group(0)
    if not str(original.get('city') or '').strip():
@@ -305,50 +308,59 @@ def fetch_candidates(profile):
     if 2<len(city)<85:original['city']=city
  cv=original.get('cv_for_matching') or original.get('cv_text_preview') or ''
  topics=_related_role_focus(cv)
- keywords=str(original.get('keywords') or '').strip()
- focus='; '.join(topics)
- variants=[
-  (dict(original,search_focus=keywords or focus,search_scope='local and nearby employers'),14),
-  (dict(original,city='',keywords='',search_focus=focus or 'work directly supported by the CV',
-        search_scope='all cities nationally, employer websites and ATS career boards'),30)
- ]
- for topic in topics[:2]:
-  variants.append((dict(original,city='',keywords='',search_focus=topic,
-                        search_scope='national, nearby and hybrid jobs with transferable duties'),30))
- variants.extend([
-  (dict(original,city='',keywords='',search_focus=focus or 'adjacent jobs supported by the CV',
-        search_scope='remote opportunities available in the country or across Europe'),30),
-  (dict(original,city='',keywords='',search_focus='alternative job titles with similar daily duties',
-        search_scope='active current nationwide career openings'),30)
- ])
- seen={};errors=[]
- # Two parallel batches, rather than many slow sequential web calls.
- # The second batch runs only when the first cannot provide a strong reserve.
- def collect(batch):
-  with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-   futures=[pool.submit(search_jobs,variant,age) for variant,age in batch]
-   for future in futures:
-    try:matches=future.result()
-    except (requests.RequestException,ValueError) as e:
-     errors.append(type(e).__name__)
-     continue
-    for job in matches:
-     if not job.get('title') or not job.get('company') or not _valid_public_link(job.get('url','')):continue
-     if job.get('published') and not _recent(job['published']):continue
-     country=str(original.get('country') or '').strip().lower()
-     listed=str(job.get('country') or '').strip().lower()
-     txt=(str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
-     remote=any(w in txt for w in ('remote anywhere','remote europe','worldwide remote',
-                                    'remote within europe','remote across europe','remote in eu'))
-     if country and listed and country not in listed and not remote:continue
-     key=job['url'].split('?')[0].rstrip('/').lower()
-     if key not in seen:seen[key]=job
- for first in (0,3):
-  collect(variants[first:first+3])
-  plausible=sum(1 for job in seen.values() if specialty_fit(job.get('title'),cv)
-                and lexical_fit(job,cv)[0]>=45)
-  if plausible>=15:break
- return list(seen.values()),errors
+ key_terms=_role_queries(cv,original.get('keywords'))
+ original['cv_for_matching']=cv
+ original['search_focus']='; '.join(key_terms[:3]) or '; '.join(topics)
+ original['search_scope']='CV-backed employer jobs close to location plus hybrid/eligible remote'
+ unique={};errors=[]
+ with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+  feeds=pool.submit(discover_feed_jobs,original)
+  web_future=(pool.submit(search_jobs,original,30)
+              if os.getenv('OPENAI_API_KEY') else None)
+  try:
+   jobs,feed_errors=feeds.result()
+   errors.extend(feed_errors)
+  except (requests.RequestException,ValueError,TypeError) as exc:
+   jobs=[];errors.append('feeds:'+type(exc).__name__)
+  for job in jobs:
+   if _valid_public_link(job.get('url','')):
+    unique.setdefault(job['url'].split('?')[0].rstrip('/').lower(),job)
+  if web_future:
+   try:
+    web_jobs=web_future.result()
+   except (requests.RequestException,ValueError,TypeError) as exc:
+    web_jobs=[];errors.append('web:'+type(exc).__name__)
+   for job in web_jobs:
+    if not _valid_public_link(job.get('url','')):continue
+    if job.get('published') and not _recent(job['published']):continue
+    country=str(original.get('country') or '').strip().lower()
+    listed=str(job.get('country') or '').strip().lower()
+    remote=any(x in (str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
+               for x in ('remote europe','remote anywhere','worldwide remote','remote within europe'))
+    if country and listed and country not in listed and not remote:continue
+    unique.setdefault(job['url'].split('?')[0].rstrip('/').lower(),job)
+ # Second focused attempt only when both structured feeds and first web pass are thin.
+ close=sum(1 for job in unique.values() if specialty_fit(job.get('title'),cv)
+           and (lexical_fit(job,cv)[0]>0
+                or len(tokenize(job.get('description','')) & tokenize(cv))>=3))
+ if close<7 and os.getenv('OPENAI_API_KEY'):
+  fallback=dict(original,city='',search_focus='; '.join(key_terms[:4]) or '; '.join(topics),
+                search_scope='search nationwide, use alternative professional titles and nearby employers')
+  try:
+   for job in search_jobs(fallback,30):
+    if not _valid_public_link(job.get('url','')):continue
+    if job.get('published') and not _recent(job['published']):continue
+    country=str(original.get('country') or '').strip().lower()
+    listed=str(job.get('country') or '').strip().lower()
+    remote=any(x in (str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
+               for x in ('remote europe','remote anywhere','worldwide remote','remote within europe'))
+    if country and listed and country not in listed and not remote:continue
+    unique.setdefault(job['url'].split('?')[0].rstrip('/').lower(),job)
+  except (requests.RequestException,ValueError,TypeError) as exc:
+   errors.append('web-fallback:'+type(exc).__name__)
+ app.logger.info('Search discovery summary: total=%s related=%s provider_errors=%s',
+                 len(unique),close,len(errors))
+ return list(unique.values()),errors
 
 def get_run(uid,date=None):
  date=date or today()
@@ -389,11 +401,11 @@ def run_search(uid):
    candidates.append((j,cv_fit,evidence))
   # Semantic validation checks requirements vs. real CV, not aspirations.
   candidates.sort(key=lambda entry:entry[1],reverse=True)
-  candidates=candidates[:40]
-  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:35]])
+  candidates=candidates[:55]
+  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:25]])
   ranked=[]
   for idx,(j,cv_fit,evidence) in enumerate(candidates):
-   assessment=ai.get(idx) if idx<35 else None
+   assessment=ai.get(idx) if idx<25 else None
    if assessment:
     semantic=assessment['cv_fit']
     if semantic<15 and cv_fit<45:continue
@@ -406,22 +418,35 @@ def run_search(uid):
    final=round(max(1,min(9.6,0.9*(cv_score/10)+0.1*pref_score)),1)
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
-  shortlist=ranked[:30]
-  checked=[]
-  with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-   verified=list(pool.map(lambda entry:_check_live(entry[1]),shortlist))
-  for entry,live in zip(shortlist,verified):
-   if live:checked.append(entry)
-   if len(checked)==5:break
+  shortlist=ranked[:35]
+  # Feed-backed listings are sourced directly from active provider APIs; avoid
+  # redundant per-link HTTP checks that routinely get bot-blocked or time out.
+  trusted={'Himalayas','Jobicy','Arbeitnow'}
+  checked=[];unverified=[]
+  candidates_to_check=[]
+  for item in shortlist:
+   if str(item[1].get('source') or '') in trusted:
+    checked.append(item)
+   else:
+    candidates_to_check.append(item)
+  if len(checked)<5 and candidates_to_check:
+   with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+    verified=list(pool.map(lambda entry:_check_live(entry[1]),candidates_to_check[:18]))
+   for entry,live in zip(candidates_to_check[:18],verified):
+    if live:checked.append(entry)
+    else:unverified.append(entry)
+  checked.sort(key=lambda entry:entry[0],reverse=True)
   if len(checked)<5:
    used={job.get('url') for _,job,_ in checked}
-   for score,job,evidence in shortlist:
+   for score,job,evidence in unverified:
     if len(checked)>=5:break
     if job.get('url') in used:continue
-    job=dict(job)
-    job['source']=str(job.get('source') or 'OpenAI web search')+' · link not independently verified'
-    checked.append((score,job,evidence));used.add(job.get('url'))
+    candidate=dict(job)
+    candidate['source']=str(candidate.get('source') or 'Source-backed')+' · link not independently verified'
+    checked.append((score,candidate,evidence));used.add(job.get('url'))
   checked.sort(key=lambda entry:entry[0],reverse=True)
+  app.logger.info('Search ranking summary: discovered=%s eligible=%s shortlisted=%s displayed=%s',
+                  len(raw),len(candidates),len(shortlist),len(checked[:5]))
   if not checked:
    with conn() as c:c.execute("DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state='working'",(uid,today()))
    return None,'No source-backed vacancy was found right now. Your search was not used, so please retry.',422
