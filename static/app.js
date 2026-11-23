@@ -41,7 +41,15 @@ function pickChoice(k,v){state.swipes[k]=v;drawStep()}
 function navigate(screen){state.screen=screen;section('app');document.querySelectorAll('[data-screen]').forEach(b=>b.classList.toggle('active',b.dataset.screen===screen));if(screen==='today')renderToday();if(screen==='watch')renderWatch();if(screen==='profile')renderProfile();if(screen==='skills')renderSkills();if(screen==='search')renderSearch();if(screen==='cv')renderCV();if(screen==='history')renderHistory();window.scrollTo(0,0)}
 function formatDate(s){try{return new Date(s+'T12:00:00Z').toLocaleDateString('en-GB',{month:'long',day:'numeric',year:'numeric'})}catch{return s}}
 function renderToday(){let jobs=[...state.jobs].sort((a,b)=>Number(b.score||0)-Number(a.score||0)).map((j,i)=>jobCard(j,i)).join('');const p=state.me.profile;const ready=!!p.has_cv;const intro=state.has_run?`<div class="status-line"><span><i class="dot-live"></i>Run complete for today</span><span>Next Run tomorrow</span></div>`:`<div class="run-panel"><span class="date-caption">${esc(formatDate(state.date))}</span><h2>Five jobs. One click.</h2><p>Based on your CV, skills and preferences.</p><button class="btn btn-dark btn-xl" ${ready?'':'disabled'} onclick="reloadJobs()" id="run-button">Run →</button>${ready?'':'<p class="privacy-note">Upload a CV to start. Your preferences are optional.</p>'}</div>`;$('main-panel').innerHTML=`<div class="page-kicker">TODAY</div><h1 class="page-heading">Your five<span class="accent">.</span></h1>${intro}${state.has_run?'<div class="reset-actions"><button class="reset-matches" onclick="resetMyMatches()">Clear matches and search again ↺</button></div>':''}<div class="jobs-grid">${jobs}</div>${state.has_run?'<p class="privacy-note" style="margin-top:22px">Listings are sourced from web search. Some dates and links may be unverified; always check the employer’s original page before applying.</p>':''}${!state.has_run?'<div class="setup-row"><button onclick="navigate(&quot;cv&quot;)">01 CV</button><button onclick="navigate(&quot;skills&quot;)">02 Work Style</button><button onclick="navigate(&quot;search&quot;)">03 Purpose</button></div>':''}`;}
-function jobCard(j,i=0){return `<article class="job-card"><div class="job-top"><div><div class="job-company">${esc(j.company)} ${j.source?.includes('DEMO')?'<span class="tag">Sample</span>':''}</div><h2 class="job-title">${esc(j.title)}</h2><div class="job-loc">${esc([j.city,j.country].filter(Boolean).filter((value,index,array)=>array.indexOf(value)===index).join(", "))}</div></div><div class="score-circle"><strong>${Number(j.score).toFixed(1)}</strong><small>FIT / 10</small></div></div><div class="job-bottom"><button class="text-action" onclick="showJob(${j.id})">Why this fit ↗</button><button class="save-button ${j.saved?'saved':''}" onclick="toggleSave(${j.id},${Boolean(j.saved)})">${j.saved?'♥ Saved':'+ MyJobs'}</button></div></article>`}
+function jobCard(j,i=0){return `<article class="job-card"><div class="job-top"><div><div class="job-company">${esc(j.company)} ${j.source?.includes('DEMO')?'<span class="tag">Sample</span>':''}</div><h2 class="job-title">${esc(j.title)}</h2><div class="job-loc">${esc([j.city,j.country].filter(Boolean).filter((value,index,array)=>array.indexOf(value)===index).join(", "))}</div></div><div class="score-circle"><strong>${Number(j.score).toFixed(1)}</strong><small>FIT / 10</small></div></div><div class="job-bottom"><button class="text-action" onclick="showJob(${j.id})">Why this fit ↗</button><div class="job-feedback-actions"><button class="not-for-me" onclick="rejectJob(${j.id})" title="Help JobFitly learn what to avoid">Not for me</button><button class="save-button ${j.saved?'saved':''}" onclick="toggleSave(${j.id},${Boolean(j.saved)})">${j.saved?'♥ Saved':'+ MyJobs'}</button></div></div></article>`}
+async function rejectJob(id){
+ try{
+  await api('/api/jobs/'+id+'/not-for-me',{method:'POST'});
+  await loadContent();
+  navigate(state.screen==='watch'?'watch':'results');
+  notify('Noted. JobFitly learns from your feedback and will prioritize different roles.');
+ }catch(e){notify(e.message,true)}
+}
 async function reloadJobs(){const btn=$('run-button');if(btn){btn.disabled=true;btn.textContent='Checking live jobs…'}try{let r=await api('/api/jobs/run',{method:'POST'});await loadContent();navigate('today');notify(r.count===5?'Your five matches are ready.':r.count+' verified jobs found today.')}catch(e){notify(e.message,true);renderToday()}}
 function renderWatch(){const items=state.watch.map(j=>`<div class="saved-row"><div><div class="job-company">${esc(j.company)} <span class="accent">· ${j.score}/10 fit</span></div><h3>${esc(j.title)}</h3><p>${esc(j.city||j.country)}</p></div><div class="saved-actions"><button class="btn btn-light" onclick="removeSave(${j.id})">Remove</button><button class="btn btn-outline" onclick="openKit(${j.id},'motivation')">Generate motivations</button><button class="btn btn-dark" onclick="openKit(${j.id},'cv')">Update CV · PDF</button></div></div>`).join('');$('main-panel').innerHTML=`<div class="page-kicker">SAVED</div><h1 class="page-heading">My jobs<span class="accent">.</span></h1><div class="saved-list">${items||'<div class="empty-state"><h3>No saved jobs yet.</h3><button class="btn btn-dark" onclick="navigate(&quot;today&quot;)">Today’s 5</button></div>'}</div>`;}
 async function toggleSave(id,saved){try{await api('/api/watchlist/'+id,{method:saved?'DELETE':'POST'});await loadContent();state.screen==='today'?renderToday():renderWatch();notify(saved?'Removed from MyJobs.':'Added to MyJobs.')}catch(e){notify(e.message,true)}}
@@ -111,6 +119,17 @@ function renderPossibilityScore(profile){
    +'<strong class="possibility-number">'+value+'/100</strong></div>'
    +'<p class="possibility-note">'+esc(caption)+'</p></div>';
 }
+function renderCareerDNA(dna={}){
+ const families=(dna.role_families||[]).filter(x=>x&&x.name).slice(0,5);
+ const skills=(dna.transferable_skills||[]).slice(0,9);
+ const roles=families.map(x=>'<span class="dna-role" title="'+esc((x.evidence||[]).join(', '))+'">'+esc(x.name)+'</span>').join('');
+ const badges=skills.map(x=>'<span class="dna-skill">'+esc(x)+'</span>').join('');
+ return '<section class="profile-cv-facts career-dna"><div class="dna-heading"><h2>Career DNA</h2><span>CV based · no extra AI cost</span></div>'
+  +'<p class="dna-intro">Documented strengths and related career directions identified from your CV.</p>'
+  +'<h3>Career directions</h3><div class="dna-tags">'+(roles||'<span class="flow-muted">Upload a detailed CV to identify role families.</span>')+'</div>'
+  +'<h3>Transferable skills</h3><div class="dna-tags">'+(badges||'<span class="flow-muted">No clear skill evidence identified yet.</span>')+'</div>'
+  +'<p class="dna-footnote">Evidence-based suggestions, not verified qualifications or guaranteed job matches.</p></section>';
+}
 function renderProfile(){
  const p=state.me.profile||{},d=p.cv_details||{};
  const label={name:'Name',email:'Email',phone:'Phone',location:'Location',linkedin:'LinkedIn',website:'Website',languages:'Languages',headline:'Professional headline',nationality:'Nationality',date_of_birth:'Date of birth'};
@@ -124,6 +143,7 @@ function renderProfile(){
  +'<section class="profile-cv-facts"><h2>'+esc(d.name||'Name confirmation needed')+'</h2>'+nameNotice+confirmName
  +(rows||'<p class="flow-muted">Upload a readable CV to extract your details.</p>')+'</section>'
  +'<section class="profile-cv-facts"><h2>What you are looking for</h2><p>'+esc([p.city,p.country,p.language,...preferences].filter(Boolean).join(' · ')||'Set your job preferences.')+'</p></section>'
+ +renderCareerDNA(p.career_dna||{})
  +'<section class="profile-cv-facts profile-work-style"><h2>Work style</h2>'+renderWorkStyleRadar(p.questions||{})+renderPossibilityScore(p)+'</section>'
  +'<p class="profile-small-note">Your CV remains the source of truth. Confirmed names are used consistently in both PDF documents.</p>'
  +'<button class="subtle-button" style="color:var(--plum)" onclick="deleteAccount()">Delete my account and data ↗</button>';
