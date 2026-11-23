@@ -85,7 +85,21 @@
   };
   reloadJobs=async function(){
     var btn=$("run-button");
-    if(btn){btn.disabled=true;btn.setAttribute("aria-busy","true");btn.innerHTML='<span class="live-search-spinner" aria-hidden="true"></span> Searching live vacancies…';}
+    if(btn&&btn.disabled)return;
+    if(btn){
+      btn.disabled=true;btn.setAttribute("aria-busy","true");
+      btn.innerHTML='<span class="find-hourglass-inline" aria-hidden="true">⌛</span> Searching…';
+      var loader=document.createElement("div");
+      loader.id="find-progress";loader.className="find-progress";loader.setAttribute("role","status");
+      loader.setAttribute("aria-live","polite");
+      loader.innerHTML='<svg class="find-hourglass-svg" viewBox="0 0 42 50" aria-hidden="true" focusable="false">'
+        +'<path class="find-hg-frame" d="M9 5H33M9 45H33M12 7V14C12 21 17 22 21 25C25 28 30 29 30 36V43M30 7V14C30 21 25 22 21 25C17 28 12 29 12 36V43"/>'
+        +'<path class="find-hg-sand-top" d="M15 14H27Q26 18 21 22Q16 18 15 14Z"/>'
+        +'<path class="find-hg-sand-bottom" d="M21 30Q16 35 15 39H27Q26 35 21 30Z"/>'
+        +'<path class="find-hg-stream" d="M21 25V31"/></svg>'
+        +'<div class="find-progress-copy"><strong>Finding the right opportunities</strong><span>Researching current vacancies and matching them with your CV…</span></div>';
+      btn.insertAdjacentElement("afterend",loader);
+    }
     try{
       var result=await api("/api/jobs/run",{method:"POST"});
       await loadContent();navigate("results");
