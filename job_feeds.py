@@ -31,12 +31,12 @@ _COUNTRIES={
 _EU={"BE","NL","DE","FR","GB","IE","LU","CH","AT","ES","PT","IT","PL",
      "DK","SE","NO","FI","CZ","SK","HU","RO","BG","GR","HR","SI","EE","LV","LT","MT","CY"}
 _FIELDS=(
- (("operations","operational","logistics"),"operations"),
- (("customer success","client","customer service"),"customer success"),
- (("project","pmo","program management"),"project management"),
- (("finance","accounting","financial"),"finance"),
- (("risk","audit","governance","compliance"),"risk"),
- (("security","cyber","identity and access"),"security"),
+ (("operations","operational","logistics","operationeel","bedrijfsvoering","logistiek","operasyon","betriebsführung"),"operations"),
+ (("customer success","client","customer service","klantenservice","klantendienst","musteri iliskileri","service client"),"customer success"),
+ (("project","pmo","program management","projectleider","projectcoördinator","projektmanagement","gestion de projet","proje yonetimi","proje yönetimi"),"project management"),
+ (("finance","accounting","financial","boekhouding","comptable","finanzen","muhasebe","finans"),"finance"),
+ (("risk","audit","governance","compliance","denetim","risico","risicobeheer","prüfung","contrôle"),"risk"),
+ (("security","cyber","identity and access","beveiliging","toegangsbeheer","siber güvenlik","securite informatique"),"security"),
  (("software","developer","programming","engineer"),"software"),
  (("data","analytics","reporting","business intelligence"),"data"),
  (("sales","account manager","business development"),"sales"),
@@ -44,9 +44,9 @@ _FIELDS=(
  (("human resources","recruit","talent acquisition"),"human resources"),
  (("designer","design","ux"),"design"),
  (("product manager","product owner"),"product"),
- (("electrician","electrical technician"),"electrician"),
+ (("electrician","electrical technician","elektricien","elektrotechniek","electricien","elektrik","elektrotechniker"),"electrician"),
  (("teacher","education","lecturer"),"education"),
- (("nurse","clinical"),"nurse"),
+ (("nurse","clinical","verpleegkundige","infirmier","hemşire"),"nurse"),
  (("mechanic","automotive"),"mechanic")
 )
 

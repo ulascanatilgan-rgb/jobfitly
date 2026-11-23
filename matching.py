@@ -6,6 +6,7 @@ specialized jobs without directly evidenced credentials or domain experience.
 import json
 import os
 import re
+import unicodedata
 
 import requests
 
@@ -15,6 +16,8 @@ junior manager director head lead specialist expert officer associate role posit
 global regional executive management opportunity years experience working
 strong skills work responsible responsibilities join company
 a an of in at by to as is are it this that on a
+van met voor het een bij en de des pour dans avec sans et und der die das
+mit oder als fur von den la le les du des bir ve ile icin
 """.split())
 _SYNONYMS = {
     "operational": "operations", "operation": "operations",
@@ -26,6 +29,21 @@ _SYNONYMS = {
     "clients": "client", "customers": "customer",
     "stakeholders": "stakeholder", "investments": "investment",
     "relations": "relationship",
+    "elektricien": "electrician", "elektrotechnicus": "electrician",
+    "electricien": "electrician", "elektrotechniek": "electrical",
+    "elektrisch": "electrical", "elektrik": "electrical",
+    "technieker": "technician", "technicus": "technician",
+    "projectleider": "project", "projectbeheer": "project",
+    "projektleiter": "project", "projektmanagement": "project",
+    "proje": "project", "yonetimi": "management",
+    "boekhouding": "accounting", "boekhouder": "accountant",
+    "comptable": "accountant", "muhasebe": "accounting",
+    "financien": "finance", "finanzen": "finance",
+    "denetim": "audit", "denetci": "audit", "controle": "control",
+    "klantenservice": "customer", "klantendienst": "customer",
+    "beveiliging": "security", "toegangsbeheer": "access",
+    "verpleegkundige": "nurse", "infirmier": "nurse",
+    "ontwikkelaar": "developer", "developpeur": "developer",
 }
 _SPECIALTY = (
     (r"\b(?:hr|human resources|head of people|chief people officer|people director|people and culture|talent acquisition|recruitment|recruiting)\b",
@@ -42,8 +60,11 @@ _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s()./-]{8,}\d(?!\w)")
 
 
 def _tokens(text):
-    words = re.findall(r"[a-zA-Z]{2,}", str(text or "").lower())
-    return {_SYNONYMS.get(w, w) for w in words if w not in _STOP}
+    value=str(text or "").lower().replace("ı","i")
+    value="".join(ch for ch in unicodedata.normalize("NFKD",value)
+                  if not unicodedata.combining(ch))
+    words=re.findall(r"[a-z]{2,}",value)
+    return {_SYNONYMS.get(w,w) for w in words if w not in _STOP}
 
 
 def redact_cv(text):
