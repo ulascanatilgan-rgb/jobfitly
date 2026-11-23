@@ -236,7 +236,7 @@
 .flow-main .kit-text{font-size:12px;line-height:1.8;padding:20px;border:1px solid #dedede;border-radius:12px;background:rgba(248,248,248,.7);white-space:pre-wrap}
 .flow-main .kit-actions{gap:8px}
 .flow-main .kit-actions .btn{font-size:11px;min-height:38px;padding:9px 13px}
-/* Landing portrait: original bytes retained; CSS only controls the visual fade. */
+/* Landing portrait: retain the original layout and white-fade styling. */
 .hero.hero-clean.hero-with-portrait{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.63fr);gap:12px;align-items:center;max-width:1240px;padding-right:32px;padding-left:42px}
 .hero-with-portrait .hero-clean-inner{width:100%;position:relative;z-index:2}
 .hero-full-image{position:relative;margin:0;width:100%;max-height:460px;height:450px;align-self:center;overflow:hidden}
@@ -353,7 +353,7 @@ body{font-size:13px}
  .hero-full-image{display:none}
  .hero-mobile-portrait{
   display:block;width:100%;height:clamp(190px,53vw,275px);margin:1px 0 15px;
-  background-image:linear-gradient(to right,#fff 0%,rgba(255,255,255,0) 16%,rgba(255,255,255,0) 84%,#fff 100%),linear-gradient(to bottom,#fff 0%,rgba(255,255,255,0) 18%,rgba(255,255,255,0) 76%,#fff 100%),url('/static/executive-office-original.png');
+  background-image:linear-gradient(to right,#fff 0%,rgba(255,255,255,0) 16%,rgba(255,255,255,0) 84%,#fff 100%),linear-gradient(to bottom,#fff 0%,rgba(255,255,255,0) 18%,rgba(255,255,255,0) 76%,#fff 100%),url('/static/jobfitly-executive-hero.avif');
   background-size:100% 100%,100% 100%,cover;background-position:center,center,center 42%;
   background-repeat:no-repeat;filter:none;
  }
