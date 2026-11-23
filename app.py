@@ -431,6 +431,8 @@ def run_search(uid):
  with conn() as c:
   row=c.execute('SELECT cv_text FROM profiles WHERE user_id=?',(uid,)).fetchone()
  p['cv_for_matching']=str(row['cv_text'] if row else '')[:15000]
+ dna=p.get('career_dna') or career_dna(p['cv_for_matching'])
+ feedback=feedback_for(uid)
  if not p['cv_for_matching'].strip():return None,'Upload a readable CV before running.',400
  # Recover interrupted searches when a browser disconnects or worker terminates.
  try:
@@ -456,6 +458,7 @@ def run_search(uid):
   candidates=[]
   allowed_languages=selected_languages(p.get('language'))
   for j in raw:
+   if feedback_penalty(j,feedback)>=100:continue
    mandatory_languages=required_languages(str(j.get('title') or '')+' '+str(j.get('description') or ''))
    if allowed_languages and mandatory_languages and not mandatory_languages.issubset(allowed_languages):continue
    if not specialty_fit(j.get('title'),p['cv_for_matching']):continue
@@ -481,15 +484,17 @@ def run_search(uid):
    else:
     cv_score=cv_fit
    _,preferences=score_job(j,p)
-   # CV fit determines 90% of match rating. Preferences are secondary.
    pref_score=score_job(j,p)[0]
-   final=round(max(1,min(9.6,0.9*(cv_score/10)+0.1*pref_score)),1)
+   dna_score=role_similarity(j,dna)
+   negative=feedback_penalty(j,feedback)
+   # Verified CV evidence dominates, with preferences and Career DNA as refiners.
+   final=round(max(1,min(9.8,.64*(cv_score/10)+.24*pref_score+.12*(dna_score/10)-negative)),1)
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
   shortlist=ranked[:35]
   # Feed-backed listings are sourced directly from active provider APIs; avoid
   # redundant per-link HTTP checks that routinely get bot-blocked or time out.
-  trusted={'Himalayas','Jobicy','Arbeitnow'}
+  trusted={'Himalayas','Jobicy','Arbeitnow','Greenhouse','Lever','Ashby','Adzuna'}
   checked=[];unverified=[]
   candidates_to_check=[]
   for item in shortlist:
@@ -497,7 +502,7 @@ def run_search(uid):
     checked.append(item)
    else:
     candidates_to_check.append(item)
-  if len(checked)<5 and candidates_to_check:
+  if len(checked)<12 and candidates_to_check:
    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
     verified=list(pool.map(lambda entry:_check_live(entry[1]),candidates_to_check[:18]))
    for entry,live in zip(candidates_to_check[:18],verified):
@@ -507,7 +512,7 @@ def run_search(uid):
   if len(checked)<5:
    used={job.get('url') for _,job,_ in checked}
    for score,job,evidence in unverified:
-    if len(checked)>=5:break
+    if len(checked)>=12:break
     if job.get('url') in used:continue
     candidate=dict(job)
     candidate['source']=str(candidate.get('source') or 'Source-backed')+' · link not independently verified'
@@ -520,7 +525,7 @@ def run_search(uid):
    return None,'No source-backed vacancy was found right now. Your search was not used, so please retry.',422
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
-   for position,(score,j,evidence) in enumerate(checked[:5],1):
+   for position,(score,j,evidence) in enumerate(checked[:12],1):
     c.execute("""INSERT INTO jobs(user_id,external_id,title,company,city,country,description,url,source,published,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,external_id) DO UPDATE SET description=excluded.description,url=excluded.url,published=excluded.published,source=excluded.source""",(uid,j['external_id'],j['title'][:240],j['company'][:200],j['city'][:230],j['country'][:100],j['description'][:14000],j['url'][:1400],j['source'],str(j['published']),now()))
     job=c.execute('SELECT id FROM jobs WHERE user_id=? AND external_id=?',(uid,j['external_id'])).fetchone()
     c.execute('INSERT INTO run_jobs(run_id,job_id,position,fit,matched_terms) VALUES(?,?,?,?,?)',(run['id'],job['id'],position,score,json.dumps(evidence)))
