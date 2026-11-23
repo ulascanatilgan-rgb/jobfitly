@@ -561,3 +561,58 @@ body{font-size:13px}
  .monkey-traveler,.monkey-swinging,.monkey-legs,.monkey-tail,.radar-surface,.radar-vertex{animation:none!important}
  .monkey-traveler{transform:translateX(44vw)}
 }
+
+
+/* Reference gibbon: continuous elegant linework, no cartoon facial features.
+   The entire bottom rope is black and deflects under the hanging hand. */
+.flow-shell{padding-bottom:156px}
+.monkey-rope-band{
+  height:144px;
+  background:#fff;
+  overflow:hidden;
+  pointer-events:none;
+  z-index:19
+}
+.gibbon-rope-svg{
+  display:block;
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  overflow:hidden
+}
+#gibbon-rope-path{stroke:#171619;stroke-width:1.55px;stroke-linecap:round;fill:none}
+.gibbon-traveler{
+  position:absolute;
+  top:0;
+  left:0;
+  width:200px;
+  height:144px;
+  will-change:transform;
+  transform:translate3d(-220px,0,0);
+  pointer-events:none
+}
+.gibbon-art{display:block;width:100%;height:100%;overflow:visible}
+.gibbon-outline path{
+  fill:none;
+  stroke:#850d45;
+  stroke-width:2.25;
+  stroke-linecap:round;
+  stroke-linejoin:round
+}
+#gibbon-head{stroke-width:2.1}
+#gibbon-muzzle{stroke-width:1.75}
+#gibbon-hip{stroke-width:1.65}
+#gibbon-left-hand,#gibbon-right-hand{stroke-width:2}
+#gibbon-eye{fill:#850d45}
+@media(max-width:600px){
+  .flow-shell{padding-bottom:134px}
+  .monkey-rope-band{height:120px}
+  .gibbon-traveler{width:164px;height:119px}
+  .gibbon-outline path{stroke-width:1.95}
+  #gibbon-head{stroke-width:1.9}
+  #gibbon-left-hand,#gibbon-right-hand{stroke-width:1.75}
+}
+@media(prefers-reduced-motion:reduce){
+  .gibbon-traveler{will-change:auto}
+}
