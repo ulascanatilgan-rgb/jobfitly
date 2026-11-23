@@ -8,6 +8,8 @@ import requests
 from job_search import search_jobs, selected_languages, required_languages
 from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
+from career_dna import career_dna, role_similarity
+from shared_inventory import prepare_inventory, shared_jobs, refresh_shared
 from cv_profile import extract_cv_details, is_plausible_person_name
 from pdf_documents import motivation_pdf, tailored_cv_pdf as detailed_cv_pdf
 from pdf_cv_sidebar import tailored_cv_pdf
@@ -86,7 +88,16 @@ def init_db():
    CREATE TABLE IF NOT EXISTS run_jobs(run_id INTEGER NOT NULL REFERENCES daily_runs(id) ON DELETE CASCADE, job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, position INTEGER NOT NULL, fit REAL NOT NULL, matched_terms TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(run_id,job_id));
    CREATE INDEX IF NOT EXISTS ix_jobs_user ON jobs(user_id);
    CREATE INDEX IF NOT EXISTS ix_run_jobs_run ON run_jobs(run_id);
+   CREATE TABLE IF NOT EXISTS job_feedback(
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+    url TEXT NOT NULL,title TEXT NOT NULL,company TEXT NOT NULL,
+    created_at TEXT NOT NULL,PRIMARY KEY(user_id,url));
+   CREATE INDEX IF NOT EXISTS ix_job_feedback_user ON job_feedback(user_id);
   ''')
+  prepare_inventory(c)
+  if 'career_dna' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
+   c.execute("ALTER TABLE profiles ADD COLUMN career_dna TEXT NOT NULL DEFAULT '{}'")
   if 'cv_details' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
    c.execute("ALTER TABLE profiles ADD COLUMN cv_details TEXT NOT NULL DEFAULT '{}'")
 init_db()
@@ -144,6 +155,12 @@ def profile_for(uid):
  d['questions']=json.loads(d['questions'] or '{}');d['swipes']=json.loads(d['swipes'] or '{}')
  d['has_cv']=bool(d['cv_text']);d['cv_text_preview']=d['cv_text'][:3200]
  d['cv_details']=json.loads(d.get('cv_details') or '{}')
+ try:dna=json.loads(d.get('career_dna') or '{}')
+ except (ValueError,TypeError):dna={}
+ if d['has_cv'] and not dna.get('role_families'):
+  dna=career_dna(d['cv_text_preview'])
+  with conn() as fix:fix.execute('UPDATE profiles SET career_dna=? WHERE user_id=?',(json.dumps(dna,ensure_ascii=False),uid))
+ d['career_dna']=dna
  d['name']=d['cv_details'].get('name','')
  d['name_needs_confirmation']=d['has_cv'] and not bool(d['name'])
  d.pop('cv_text')
@@ -485,7 +502,7 @@ def index():return render_template('index.html')
 @app.get('/health')
 def health():return jsonify(status='ok')
 @app.get('/api/config')
-def config():return jsonify(questions=[{'id':x,'text':y} for x,y in QUESTIONS],swipes=[{'id':x,'label':y,'choices':z} for x,y,z in SWIPES],live_jobs=bool(os.getenv('OPENAI_API_KEY')),ai=bool(os.getenv('OPENAI_API_KEY')),csrf=csrf_token())
+def config():return jsonify(questions=[{'id':x,'text':y} for x,y in QUESTIONS],swipes=[{'id':x,'label':y,'choices':z} for x,y,z in SWIPES],live_jobs=True,ai=bool(os.getenv('OPENAI_API_KEY')),csrf=csrf_token())
 @app.post('/api/register')
 def register():
  d=request.get_json(silent=True) or {}; email=str(d.get('email','')).strip().lower(); password=str(d.get('password',''))
@@ -561,8 +578,9 @@ def upload_cv():
  if len(text)<50:return jsonify(error='Could not extract readable text from the CV. Try DOCX or a text-based PDF.'),400
  details=extract_cv_details(text)
  with conn() as c:
-  c.execute("UPDATE profiles SET cv_name=?,cv_text=?,cv_details=?,name=CASE WHEN ? <> '' THEN ? ELSE name END,updated_at=? WHERE user_id=?",
-   (secure_filename(f.filename),text,json.dumps(details,ensure_ascii=False),details.get('name',''),details.get('name',''),now(),session['uid']))
+  c.execute("UPDATE profiles SET cv_name=?,cv_text=?,cv_details=?,career_dna=?,name=CASE WHEN ? <> '' THEN ? ELSE name END,updated_at=? WHERE user_id=?",
+   (secure_filename(f.filename),text,json.dumps(details,ensure_ascii=False),
+    json.dumps(career_dna(text),ensure_ascii=False),details.get('name',''),details.get('name',''),now(),session['uid']))
   # Replacing the source CV invalidates every previously generated application kit.
   c.execute('DELETE FROM kits WHERE user_id=?',(session['uid'],))
  return jsonify(ok=True,profile=profile_for(session['uid']))
