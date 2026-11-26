@@ -20,7 +20,7 @@ async function api(path,options={}){const r=await fetch(path,{...options,headers
 function notify(msg,error=false){const e=$('toast');e.textContent=msg;e.className='toast show'+(error?' error':'');setTimeout(()=>e.className='toast',3400);}
 function section(id){['landing','auth','app','onboarding'].forEach(i=>$(i).classList.toggle('hidden',i!==id));window.scrollTo(0,0);}
 function showLanding(){section('landing');}
-function showAuth(mode='register'){state.authMode=mode;section('auth');$('auth-title').textContent=mode==='register'?'Create your account.':'Welcome back.';$('auth-subtitle').textContent=mode==='register'?'Just the essentials. We’ll take it from there.':'Ready for your next five?';$('auth-submit').textContent=mode==='register'?'Create account →':'Log in →';$('auth-toggle').innerHTML=mode==='register'?'Already have an account? <button onclick="showAuth(\'login\')">Log in</button>':'New to JobFitly? <button onclick="showAuth(\'register\')">Get started</button>';}
+function showAuth(mode='register'){state.authMode=mode;section('auth');$('auth-title').textContent=mode==='register'?'Create your account.':'Welcome back.';$('auth-subtitle').textContent=mode==='register'?'Just the essentials. We’ll take it from there.':'Ready for your next five?';$('auth-submit').textContent=mode==='register'?'Create account →':'Log in →';$('auth-toggle').innerHTML=mode==='register'?'Already have an account? <button onclick="showAuth(\'login\')">Log in</button>':'New to Waydefine? <button onclick="showAuth(\'register\')">Get started</button>';}
 $('auth-form').addEventListener('submit',async e=>{e.preventDefault();const submit=$('auth-submit');submit.disabled=true;try{const login=await api('/api/'+state.authMode,{method:'POST',body:JSON.stringify({email:$('auth-email').value,password:$('auth-password').value,remember:$('auth-remember').checked})});state.config.csrf=login.csrf;await boot(true);}catch(e){notify(e.message,true)}finally{submit.disabled=false}});
 async function boot(){state.config=await api('/api/config');try{state.me=await api('/api/me')}catch{showLanding();return;}let p=state.me.profile;state.questions={...p.questions};state.swipes={...p.swipes};await loadContent();navigate('today')}
 async function loadContent(){let [a,b]=await Promise.all([api('/api/jobs'),api('/api/watchlist')]);state.jobs=a.jobs;state.watch=b.jobs;state.has_run=a.has_run;state.date=a.date;updateCounts();}
@@ -46,13 +46,13 @@ function pickChoice(k,v){
 function navigate(screen){state.screen=screen;section('app');document.querySelectorAll('[data-screen]').forEach(b=>b.classList.toggle('active',b.dataset.screen===screen));if(screen==='today')renderToday();if(screen==='watch')renderWatch();if(screen==='profile')renderProfile();if(screen==='skills')renderSkills();if(screen==='search')renderSearch();if(screen==='cv')renderCV();if(screen==='history')renderHistory();window.scrollTo(0,0)}
 function formatDate(s){try{return new Date(s+'T12:00:00Z').toLocaleDateString('en-GB',{month:'long',day:'numeric',year:'numeric'})}catch{return s}}
 function renderToday(){let jobs=[...state.jobs].sort((a,b)=>Number(b.score||0)-Number(a.score||0)).map((j,i)=>jobCard(j,i)).join('');const p=state.me.profile;const ready=!!p.has_cv;const intro=state.has_run?`<div class="status-line"><span><i class="dot-live"></i>Run complete for today</span><span>Next Run tomorrow</span></div>`:`<div class="run-panel"><span class="date-caption">${esc(formatDate(state.date))}</span><h2>Five jobs. One click.</h2><p>Based on your CV, skills and preferences.</p><button class="btn btn-dark btn-xl" ${ready?'':'disabled'} onclick="reloadJobs()" id="run-button">Run →</button>${ready?'':'<p class="privacy-note">Upload a CV to start. Your preferences are optional.</p>'}</div>`;$('main-panel').innerHTML=`<div class="page-kicker">TODAY</div><h1 class="page-heading">Your five<span class="accent">.</span></h1>${intro}${state.has_run?'<div class="reset-actions"><button class="reset-matches" onclick="resetMyMatches()">Clear matches and search again ↺</button></div>':''}<div class="jobs-grid">${jobs}</div>${state.has_run?'<p class="privacy-note" style="margin-top:22px">Listings are sourced from web search. Some dates and links may be unverified; always check the employer’s original page before applying.</p>':''}${!state.has_run?'<div class="setup-row"><button onclick="navigate(&quot;cv&quot;)">01 CV</button><button onclick="navigate(&quot;skills&quot;)">02 Work Style</button><button onclick="navigate(&quot;search&quot;)">03 Purpose</button></div>':''}`;}
-function jobCard(j,i=0){return `<article class="job-card"><div class="job-top"><div><div class="job-company">${esc(j.company)} ${j.source?.includes('DEMO')?'<span class="tag">Sample</span>':''}</div><h2 class="job-title">${esc(j.title)}</h2><div class="job-loc">${esc([j.city,j.country].filter(Boolean).filter((value,index,array)=>array.indexOf(value)===index).join(", "))}</div></div><div class="score-circle"><strong>${Number(j.score).toFixed(1)}</strong><small>FIT / 10</small></div></div><div class="job-bottom"><button class="text-action" onclick="showJob(${j.id})">Why this fit ↗</button><div class="job-feedback-actions"><button class="not-for-me" onclick="rejectJob(${j.id})" title="Help JobFitly learn what to avoid">Not for me</button><button class="save-button ${j.saved?'saved':''}" onclick="toggleSave(${j.id},${Boolean(j.saved)})">${j.saved?'♥ Saved':'+ MyJobs'}</button></div></div></article>`}
+function jobCard(j,i=0){return `<article class="job-card"><div class="job-top"><div><div class="job-company">${esc(j.company)} ${j.source?.includes('DEMO')?'<span class="tag">Sample</span>':''}</div><h2 class="job-title">${esc(j.title)}</h2><div class="job-loc">${esc([j.city,j.country].filter(Boolean).filter((value,index,array)=>array.indexOf(value)===index).join(", "))}</div></div><div class="score-circle"><strong>${Number(j.score).toFixed(1)}</strong><small>FIT / 10</small></div></div><div class="job-bottom"><button class="text-action" onclick="showJob(${j.id})">Why this fit ↗</button><div class="job-feedback-actions"><button class="not-for-me" onclick="rejectJob(${j.id})" title="Help Waydefine learn what to avoid">Not for me</button><button class="save-button ${j.saved?'saved':''}" onclick="toggleSave(${j.id},${Boolean(j.saved)})">${j.saved?'♥ Saved':'+ MyJobs'}</button></div></div></article>`}
 async function rejectJob(id){
  try{
   await api('/api/jobs/'+id+'/not-for-me',{method:'POST'});
   await loadContent();
   navigate(state.screen==='watch'?'watch':'results');
-  notify('Noted. JobFitly learns from your feedback and will prioritize different roles.');
+  notify('Noted. Waydefine learns from your feedback and will prioritize different roles.');
  }catch(e){notify(e.message,true)}
 }
 async function reloadJobs(){const btn=$('run-button');if(btn){btn.disabled=true;btn.textContent='Checking live jobs…'}try{let r=await api('/api/jobs/run',{method:'POST'});await loadContent();navigate('today');notify(r.count===5?'Your five matches are ready.':r.count+' verified jobs found today.')}catch(e){notify(e.message,true);renderToday()}}
@@ -134,7 +134,7 @@ function renderCareerDNA(dna={},feedbackCount=0){
   +'<h3>Career directions</h3><div class="dna-tags">'+(roles||'<span class="flow-muted">Upload a detailed CV to identify role families.</span>')+'</div>'
   +'<h3>Transferable skills</h3><div class="dna-tags">'+(badges||'<span class="flow-muted">No clear skill evidence identified yet.</span>')+'</div>'
   +'<p class="dna-footnote">Evidence-based suggestions, not verified qualifications or guaranteed job matches.</p>'
-  +(feedbackCount?'<p class="dna-learning-note">JobFitly Learns · '+feedbackCount+' rejected role'+(feedbackCount===1?'':'s')+' remembered.</p>':'')
+  +(feedbackCount?'<p class="dna-learning-note">Waydefine Learns · '+feedbackCount+' rejected role'+(feedbackCount===1?'':'s')+' remembered.</p>':'')
   +'</section>';
 }
 function renderAlternativeNextMoves(moves=[],selected=[]){
@@ -280,12 +280,12 @@ function previewKitPdf(){
  const preview=document.createElement('div');
  preview.className='pdf-preview-screen';preview.id='pdf-preview';
  preview.innerHTML='<header class="pdf-preview-header">'
- +'<button class="pdf-back" type="button" onclick="closePdfPreview()">← Back to JobFitly</button>'
+ +'<button class="pdf-back" type="button" onclick="closePdfPreview()">← Back to Waydefine</button>'
  +'<strong>'+label+'</strong>'
  +'<button class="pdf-save btn btn-dark" type="button" onclick="savePdfFromApp()">Save PDF ↓</button>'
  +'</header>'
  +'<iframe class="pdf-preview-frame" title="'+label+' PDF preview" src="/api/kit/'+job.id+'/download/'+kind+'?view=1"></iframe>'
- +'<p class="pdf-preview-tip">The preview stays inside JobFitly. Use Back to return to your application.</p>';
+ +'<p class="pdf-preview-tip">The preview stays inside Waydefine. Use Back to return to your application.</p>';
  document.body.appendChild(preview);
  document.body.classList.add('pdf-open');
 }
@@ -303,10 +303,10 @@ async function savePdfFromApp(){
   if(blob.type!=='application/pdf')throw new Error('Unexpected file format.');
   const link=URL.createObjectURL(blob),anchor=document.createElement('a');
   const company=String(job.company||'Application').replace(/[^a-z0-9_-]/gi,'_').slice(0,40);
-  anchor.href=link;anchor.download='JobFitly_'+kind+'_'+company+'.pdf';
+  anchor.href=link;anchor.download='Waydefine_'+kind+'_'+company+'.pdf';
   document.body.appendChild(anchor);anchor.click();anchor.remove();
   setTimeout(()=>URL.revokeObjectURL(link),25000);
-  notify('PDF ready. Use Back to JobFitly when finished.');
+  notify('PDF ready. Use Back to Waydefine when finished.');
  }catch(error){notify(error.message,true)}
 }
 function downloadKit(){previewKitPdf()}
@@ -406,7 +406,7 @@ async function renderHistory(){
  }catch(e){notify(e.message,true)}
 }
 async function toggleHistorySave(id,saved){try{await api('/api/watchlist/'+id,{method:saved?'DELETE':'POST'});await loadContent();renderHistory();notify(saved?'Removed.':'Saved.')}catch(e){notify(e.message,true)}}
-async function deleteAccount(){if(!confirm('Permanently delete your JobFitly account, CV, preferences and saved jobs? This cannot be undone.'))return;try{const r=await api('/api/account/delete',{method:'POST'});state.me=null;showLanding();notify('Account deleted.')}catch(e){notify(e.message,true)}}
+async function deleteAccount(){if(!confirm('Permanently delete your Waydefine account, CV, preferences and saved jobs? This cannot be undone.'))return;try{const r=await api('/api/account/delete',{method:'POST'});state.me=null;showLanding();notify('Account deleted.')}catch(e){notify(e.message,true)}}
 async function resetMyMatches(){
  if(!confirm('Clear your previous matches and History? Jobs saved in MyJobs will stay.'))return;
  try{await api('/api/jobs/reset',{method:'POST'});await loadContent();navigate('today');notify('Previous matches cleared. Your MyJobs are safe. Run again.');}
