@@ -48,6 +48,19 @@
       +mini+'</div>'
       +'<div class="flow-steps" aria-label="Five steps to finding a job">'+html+'</div>';
   };
+  function renderMatchInsight(jobs){
+    var scores=jobs.filter(function(j){return j.score!==null && j.score!==undefined && j.score!=="" && Number.isFinite(Number(j.score)) && !String(j.source||"").toUpperCase().includes("DEMO")}).map(function(j){return Number(j.score)});
+    var strong=scores.filter(function(n){return n>=8}).length;
+    var best=scores.length?Math.max.apply(null,scores):0;
+    var title,copy;
+    if(!scores.length){title="Keep exploring";copy="No scored opportunities are available in this search yet. Check back in the coming days as new vacancies appear.";}
+    else if(strong>=2){title="Time to take action";copy="Several strong matches align with your profile, giving you promising opportunities to stand out. Prioritise these roles, tailor your CV and motivation, and consider contacting the hiring managers directly.";}
+    else if(strong===1){title="One opportunity stands out";copy="One role is a strong match for your profile. Review it closely, tailor your CV and motivation, and reach out to the hiring manager if appropriate.";}
+    else if(best>=7){title="Promising possibilities";copy="Some roles show promising alignment with your profile, although there is room for a stronger match. Review the best options carefully and keep searching for opportunities that fit your ambitions even better.";}
+    else if(best>=5){title="Let’s keep looking";copy="A few roles could be suitable, but none is a strong match for your profile yet. Keep exploring in the coming days as new vacancies appear. Let’s keep looking for your best match.";}
+    else{title="Better matches are worth waiting for";copy="The available roles have limited alignment with your profile. Avoid rushing into applications and keep searching as new opportunities appear.";}
+    return '<aside aria-label="Search insight" style="box-sizing:border-box;flex:1 1 300px;max-width:440px;padding:16px 20px;border:1px solid rgba(110,30,48,.18);border-left:3px solid #78283d;border-radius:10px;background:rgba(120,40,61,.035);margin:0 0 20px"><small style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#78283d">MATCH INSIGHT</small><div style="font-weight:700;font-size:15px;margin:5px 0">'+esc(title)+'</div><p style="font-size:13px;line-height:1.6;margin:0">'+esc(copy)+'</p></aside>';
+  }
   window.renderFlowResults=function(){
     var p=state.me && state.me.profile || {};
     var ready=!!p.has_cv;
@@ -62,8 +75,10 @@
        ?'<div class="jobs-grid flow-results-grid">'+state.jobs.slice().sort(function(a,b){return Number(b.score||0)-Number(a.score||0)}).map(function(j,i){return jobCard(j,i)}).join("")+'</div>'
        :(state.has_run?'<p class="flow-muted">No sourced vacancies available for this search.</p>':'');
     $("main-panel").innerHTML='<div class="page-kicker">STEP 04</div>' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px"><div style="flex:1 1 240px">' +
       '<h1 class="page-heading">Let’s find<span class="accent">.</span></h1>' +
-      '<p class="page-subheading">Your best available CV matches, highest fit first.</p>' +
+      '<p class="page-subheading">Your best available CV matches, highest fit first.</p></div>' +
+      (state.has_run?renderMatchInsight(state.jobs):'')+'</div>' +
       status+jobs+'<p class="flow-verification">Confirm each vacancy on the employer’s website before applying.</p>';
   };
   var oldCV=renderCV,oldSkills=renderSkills,oldSearch=renderSearch,
