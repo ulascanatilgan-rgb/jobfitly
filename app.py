@@ -11,7 +11,7 @@ from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
 from next_moves import alternative_next_moves, valid_path_titles, path_title_match
 from shared_inventory import prepare_inventory, shared_jobs, refresh_shared
-from preferences import normalize_preferences, preference_alignment
+from preferences import normalize_preferences, preference_alignment, preference_constraints_match
 from cv_profile import extract_cv_details, is_plausible_person_name
 from pdf_documents import motivation_pdf, tailored_cv_pdf as detailed_cv_pdf
 from pdf_cv_sidebar import tailored_cv_pdf
@@ -311,6 +311,7 @@ def preview_candidates(uid,max_results=5):
  results=[]
  for job in shared_jobs(DB,p.get('country'),650):
   if is_seen(job,seen):continue
+  if not preference_constraints_match(job,p.get('swipes')):continue
   if not specialty_fit(job.get('title'),cv):continue
   if feedback_penalty(job,feedback)>=100:continue
   mandatory=required_languages(str(job.get('title') or '')+' '+str(job.get('description') or ''))
@@ -415,6 +416,7 @@ def fetch_candidates(profile):
   for job in rows:
    link=job.get('url') or ''
    if not _valid_public_link(link):continue
+   if not preference_constraints_match(job,original.get('swipes')):continue
    # Employer ATS feeds list currently published vacancies. Their first
    # publication dates can be older than 30 days without implying closure.
    if job.get('source') not in {'Greenhouse','Lever','Ashby'} and job.get('published') and not _recent(job['published']):continue
@@ -512,6 +514,7 @@ def run_search(uid):
   allowed_languages=selected_languages(p.get('language'))
   for j in raw:
    if is_seen(j,seen):continue
+   if not preference_constraints_match(j,p.get('swipes')):continue
    if feedback_penalty(j,feedback)>=100:continue
    mandatory_languages=required_languages(str(j.get('title') or '')+' '+str(j.get('description') or ''))
    if allowed_languages and mandatory_languages and not mandatory_languages.issubset(allowed_languages):continue
