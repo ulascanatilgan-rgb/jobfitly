@@ -202,9 +202,9 @@ def discover_feed_jobs(profile):
     from next_moves import valid_path_titles
     selected=valid_path_titles(profile.get("path_keywords"))
     # Preserve a CV-grounded broad query even when exploratory paths are chosen.
-    focus=[*selected[:2],*(queries[:1] if queries else [])]
+    focus=[*selected[:3],*(queries[:1] if queries else [])]
     if not focus:focus=queries[:2]
-    focus=list(dict.fromkeys(focus))[:3]
+    focus=list(dict.fromkeys(focus))[:4]
     tasks=[("jobicy",lambda:_jobicy(profile,code))]
     for i,phrase in enumerate(focus):
         tasks.append(("himalayas"+str(i),lambda q=phrase:_himalayas(profile,code,q)))
@@ -213,7 +213,7 @@ def discover_feed_jobs(profile):
     if code:tasks.extend([("arbeitnow1",lambda:_arbeitnow(profile,code,1)),
                           ("arbeitnow2",lambda:_arbeitnow(profile,code,2))])
     result=[];errors=[]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         futures={pool.submit(fn):name for name,fn in tasks}
         for future in concurrent.futures.as_completed(futures):
             try:result.extend(future.result())

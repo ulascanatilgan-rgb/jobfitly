@@ -532,7 +532,7 @@ def run_search(uid):
     evidence=evidence or overlap[:6]
    candidates.append((j,cv_fit,evidence))
   # Semantic validation checks requirements vs. real CV, not aspirations.
-  candidates.sort(key=lambda entry:entry[1],reverse=True)
+  candidates.sort(key=lambda entry:entry[1]+23*path_title_match(entry[0],p.get('path_keywords')),reverse=True)
   candidates=candidates[:55]
   ai=ai_cv_fit(p,[entry[0] for entry in candidates[:25]])
   ranked=[]
