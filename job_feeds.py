@@ -209,7 +209,7 @@ def discover_feed_jobs(profile):
     for i,phrase in enumerate(focus):
         tasks.append(("himalayas"+str(i),lambda q=phrase:_himalayas(profile,code,q)))
     if not focus and code:
-        tasks.append(("himalayas-default",lambda:_himalayas(profile,code))
+        tasks.append(("himalayas-default",lambda:_himalayas(profile,code)))
     if code:tasks.extend([("arbeitnow1",lambda:_arbeitnow(profile,code,1)),
                           ("arbeitnow2",lambda:_arbeitnow(profile,code,2))])
     result=[];errors=[]
