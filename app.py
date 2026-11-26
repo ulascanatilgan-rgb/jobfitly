@@ -450,9 +450,10 @@ def get_run(uid,date=None):
     (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
    ORDER BY r.fit DESC,r.position ASC LIMIT 5""",(run['id'],)).fetchall()
   jobs=[dict(j) for j in rows]
-  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
-  remember_displayed(uid,jobs)
-  return dict(run),jobs
+ for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
+ # Only positions actually returned to the UI are recorded, not the reserves.
+ remember_displayed(uid,jobs)
+ return dict(run),jobs
 
 def run_search(uid):
  p=profile_for(uid)
