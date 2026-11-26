@@ -469,7 +469,7 @@ def get_run(uid,date=None):
    WHERE r.run_id=? AND NOT EXISTS
     (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
    ORDER BY r.position ASC LIMIT 5""",(run['id'],)).fetchall()
-  jobs=[dict(j) for j in rows]
+  jobs=sorted((dict(j) for j in rows),key=lambda item:item['score'],reverse=True)
  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
  # Only positions actually returned to the UI are recorded, not the reserves.
  remember_displayed(uid,jobs)
