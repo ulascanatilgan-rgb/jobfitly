@@ -468,7 +468,7 @@ def get_run(uid,date=None):
    LEFT JOIN watchlist w ON w.job_id=j.id AND w.user_id=j.user_id
    WHERE r.run_id=? AND NOT EXISTS
     (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
-   ORDER BY r.fit DESC,r.position ASC LIMIT 5""",(run['id'],)).fetchall()
+   ORDER BY r.position ASC LIMIT 5""",(run['id'],)).fetchall()
   jobs=[dict(j) for j in rows]
  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
  # Only positions actually returned to the UI are recorded, not the reserves.
@@ -590,6 +590,24 @@ def run_search(uid):
     candidate['source']=str(candidate.get('source') or 'Source-backed')+' · link not independently verified'
     checked.append((score,candidate,evidence));used.add(job.get('url'))
   checked.sort(key=lambda entry:entry[0],reverse=True)
+  # Curate the five displayed positions: when a user explicitly chose a
+  # CV-grounded alternative path, include up to three supported matches.
+  # Remaining slots still go to the strongest standard CV-aligned jobs.
+  chosen_paths=valid_path_titles(p.get('path_keywords'))
+  if chosen_paths:
+   exploratory=[];already=set()
+   for direction in chosen_paths:
+    for entry in checked:
+     identity=entry[1].get('url')
+     if identity in already or entry[0]<5.0:continue
+     if path_title_match(entry[1],[direction])<.7:continue
+     exploratory.append(entry);already.add(identity)
+     break
+    if len(exploratory)>=3:break
+   other=[entry for entry in checked if entry[1].get('url') not in already]
+   top=(exploratory+other)[:5]
+   top_urls={entry[1].get('url') for entry in top}
+   checked=top+[entry for entry in checked if entry[1].get('url') not in top_urls]
   app.logger.info('Search ranking summary: discovered=%s eligible=%s shortlisted=%s displayed=%s',
                   len(raw),len(candidates),len(shortlist),len(checked[:5]))
   if not checked:

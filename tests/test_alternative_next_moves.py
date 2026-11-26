@@ -133,7 +133,7 @@ def test_profile_and_keywords_ui_and_syntax():
  assert "removeAlternativePath" in js
  assert "selected-path-list" in js
  assert "CV strength overlap" in js and "Work-style alignment" in js
- assert ".next-move-cards" in css and ".selected-path-chip" in css
+ assert ".next-moves-cards" in css and ".selected-path-chip" in css
  if shutil.which("node"):
   done=subprocess.run(["node","--check",str(root/"static/app.js")],
                       capture_output=True,text=True,timeout=8)
