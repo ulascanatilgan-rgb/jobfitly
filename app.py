@@ -133,7 +133,7 @@ def init_db():
       FROM run_jobs r JOIN jobs j ON j.id=r.job_id WHERE r.position<=5""").fetchall():
    for key in _job_keys(dict(prior)):
     c.execute('INSERT OR IGNORE INTO seen_jobs(user_id,job_key,first_seen_at) VALUES (?,?,?)',
-              (prior['user_id'],key,now()))
+              (prior['user_id'],key,datetime.datetime.now(datetime.timezone.utc).isoformat()))
   if 'career_dna' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
    c.execute("ALTER TABLE profiles ADD COLUMN career_dna TEXT NOT NULL DEFAULT '{}'")
   if 'cv_details' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
