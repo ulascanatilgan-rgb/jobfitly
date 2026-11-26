@@ -729,3 +729,82 @@ body{font-size:13px}
 .career-dna .dna-skill{color:#252124;background:#f3f0f1;border:1px solid #e6e1e4}
 .career-dna .dna-footnote{font-size:9px;color:#90898d;line-height:1.5;margin:15px 0 2px}
 @media(max-width:420px){.job-bottom{gap:7px;flex-wrap:wrap}.not-for-me{font-size:9px;padding:6px 8px}}
+
+
+/* 2026-11-26: minimal five-step home with optional small personalized work radar. */
+.flow-home-top{
+ display:grid;grid-template-columns:minmax(0,1fr);align-items:center;
+ gap:18px;min-height:170px;margin:7px 0 0
+}
+.flow-home-top.has-radar{grid-template-columns:minmax(0,1fr) minmax(190px,240px)}
+.flow-home-top .flow-home-intro{margin:0;min-width:0;align-self:center}
+.flow-home-top .flow-home-intro h1{
+ font-size:clamp(31px,3.8vw,40px);line-height:1.11;
+ letter-spacing:-.047em;margin:0 0 12px
+}
+.flow-home-top .flow-home-intro p{max-width:335px;font-size:11px;line-height:1.6}
+.flow-home-mini{width:100%;max-width:244px;justify-self:end;min-width:0;align-self:center}
+.flow-home-mini .work-radar{width:100%;height:auto;display:block;margin:0;overflow:visible}
+.flow-home-mini .radar-label{font-size:12.5px!important;fill:#353036}
+.flow-home-mini .radar-grid-ring{stroke-width:1.2}
+.flow-home-mini .radar-axis{stroke-width:.9}
+.flow-home-mini .radar-surface{fill-opacity:.14}
+.flow-home-mini .radar-vertex{r:3}
+.flow-home-person{font-size:11px;font-weight:800;text-align:center;color:#292529;
+ letter-spacing:-.015em;line-height:1.4;margin-top:-5px;overflow-wrap:anywhere}
+.flow-main .flow-steps{max-width:775px;margin:37px auto 0}
+@media(max-width:600px){
+ .flow-home-top{min-height:138px;gap:10px}
+ .flow-home-top.has-radar{grid-template-columns:minmax(0,1fr) minmax(0,42%)}
+ .flow-home-top .flow-home-intro h1{font-size:clamp(19px,5.6vw,27px);line-height:1.14;margin-bottom:9px}
+ .flow-home-overline{font-size:8px;margin-bottom:8px}
+ .flow-home-top .flow-home-intro p{font-size:10px;line-height:1.5}
+ .flow-home-mini{max-width:175px}
+ .flow-home-mini .radar-label{font-size:12.2px!important}
+ .flow-home-person{font-size:9.5px;margin-top:-2px}
+ .flow-main .flow-steps{margin:29px auto 0}
+}
+@media(max-width:360px){
+ .flow-home-top{gap:6px}
+ .flow-home-top .flow-home-intro h1{font-size:19px}
+ .flow-home-top .flow-home-intro p{font-size:9px}
+ .flow-home-person{font-size:9px}
+}
+
+/* Compact, accessible multi-option dropdowns for every job preference. */
+.flow-main .search-preferences-grid .multi-pref{
+ position:relative;min-width:0;display:block;background:#fff;
+ border:1px solid #d7d1d5;border-radius:9px
+}
+.flow-main .multi-pref[open]{z-index:90;border-color:#850d45}
+.flow-main .multi-pref>summary{
+ display:grid;grid-template-columns:minmax(0,1fr) 14px;gap:4px 5px;
+ align-content:center;cursor:pointer;list-style:none;min-height:59px;
+ padding:9px 10px;outline-offset:2px
+}
+.flow-main .multi-pref>summary::-webkit-details-marker{display:none}
+.multi-pref-title{grid-column:1;font-size:9px;font-weight:750;color:#585057;line-height:1.25}
+.multi-pref-summary{grid-column:1;font-size:11px;color:#1b181a;font-weight:700;
+ line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.multi-pref-chevron{grid-column:2;grid-row:1 / span 2;align-self:center;
+ color:#850d45;font-size:17px;text-align:center;transition:transform .18s ease}
+.multi-pref[open] .multi-pref-chevron{transform:rotate(180deg)}
+.multi-pref-options{
+ position:absolute;top:calc(100% + 5px);left:0;width:max(100%,204px);
+ max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:1px;
+ background:#fff;border:1px solid #d8cbd2;border-radius:9px;
+ box-shadow:0 13px 28px rgba(24,13,20,.14);padding:6px;z-index:100
+}
+.multi-pref-item{display:flex;align-items:center;gap:9px;padding:9px 7px;
+ border-radius:6px;cursor:pointer;font-size:10.5px;font-weight:600;color:#282328}
+.multi-pref-item:hover{background:#f8f1f5}
+.multi-pref-item input[type=checkbox]{accent-color:#850d45;width:15px;height:15px;
+ cursor:pointer;flex-shrink:0}
+.multi-pref-item span{line-height:1.4}
+@media(max-width:600px){
+ .flow-main .multi-pref>summary{padding:9px 8px;min-height:56px}
+ .multi-pref-title{font-size:9px}
+ .multi-pref-summary{font-size:10px}
+ .multi-pref-options{width:max(100%,190px);max-width:calc(100vw - 33px)}
+ .multi-pref:nth-child(even) .multi-pref-options{left:auto;right:0}
+}
