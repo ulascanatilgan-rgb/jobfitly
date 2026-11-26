@@ -298,10 +298,12 @@ def preview_candidates(uid,max_results=5):
   row=c.execute('SELECT cv_text FROM profiles WHERE user_id=?',(uid,)).fetchone()
  cv=str(row['cv_text'] if row else '')[:14000]
  feedback=feedback_for(uid)
+ seen=previously_seen(uid)
  dna=p.get('career_dna') or career_dna(cv)
  selected=selected_languages(p.get('language'))
  results=[]
  for job in shared_jobs(DB,p.get('country'),650):
+  if is_seen(job,seen):continue
   if not specialty_fit(job.get('title'),cv):continue
   if feedback_penalty(job,feedback)>=100:continue
   mandatory=required_languages(str(job.get('title') or '')+' '+str(job.get('description') or ''))
@@ -309,8 +311,10 @@ def preview_candidates(uid,max_results=5):
   fit,terms=lexical_fit(job,cv)
   dna_fit=role_similarity(job,dna)
   if fit<20 and dna_fit<45:continue
-  pref=score_job(job,p)[0]
-  score=round(max(1,min(9.8,.64*fit/10+.24*pref+.12*dna_fit/10-feedback_penalty(job,feedback))),1)
+  alignment=preference_alignment(job,p.get('swipes'))
+  if alignment is None:weighted=.82*(fit/10)+.18*(dna_fit/10)
+  else:weighted=.65*(fit/10)+.25*alignment+.10*(dna_fit/10)
+  score=round(max(1,min(9.8,weighted-feedback_penalty(job,feedback))),1)
   results.append(dict(job,score=score,matched_terms=terms))
  results.sort(key=lambda item:item['score'],reverse=True)
  return results[:max_results]
@@ -447,6 +451,7 @@ def get_run(uid,date=None):
    ORDER BY r.fit DESC,r.position ASC LIMIT 5""",(run['id'],)).fetchall()
   jobs=[dict(j) for j in rows]
   for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
+  remember_displayed(uid,jobs)
   return dict(run),jobs
 
 def run_search(uid):
@@ -459,6 +464,7 @@ def run_search(uid):
  p['cv_for_matching']=str(row['cv_text'] if row else '')[:15000]
  dna=p.get('career_dna') or career_dna(p['cv_for_matching'])
  feedback=feedback_for(uid)
+ seen=previously_seen(uid)
  if not p['cv_for_matching'].strip():return None,'Upload a readable CV before running.',400
  # Recover interrupted searches when a browser disconnects or worker terminates.
  try:
@@ -484,6 +490,7 @@ def run_search(uid):
   candidates=[]
   allowed_languages=selected_languages(p.get('language'))
   for j in raw:
+   if is_seen(j,seen):continue
    if feedback_penalty(j,feedback)>=100:continue
    mandatory_languages=required_languages(str(j.get('title') or '')+' '+str(j.get('description') or ''))
    if allowed_languages and mandatory_languages and not mandatory_languages.issubset(allowed_languages):continue
@@ -509,12 +516,13 @@ def run_search(uid):
     cv_score=0.8*semantic+0.2*cv_fit
    else:
     cv_score=cv_fit
-   _,preferences=score_job(j,p)
-   pref_score=score_job(j,p)[0]
    dna_score=role_similarity(j,dna)
+   alignment=preference_alignment(j,p.get('swipes'))
    negative=feedback_penalty(j,feedback)
-   # Verified CV evidence dominates, with preferences and Career DNA as refiners.
-   final=round(max(1,min(9.8,.64*(cv_score/10)+.24*pref_score+.12*(dna_score/10)-negative)),1)
+   # OR within each preference field, weighted across fields; CV remains primary.
+   if alignment is None:weighted=.82*(cv_score/10)+.18*(dna_score/10)
+   else:weighted=.65*(cv_score/10)+.25*alignment+.10*(dna_score/10)
+   final=round(max(1,min(9.8,weighted-negative)),1)
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
   shortlist=ranked[:35]
@@ -548,7 +556,7 @@ def run_search(uid):
                   len(raw),len(candidates),len(shortlist),len(checked[:5]))
   if not checked:
    with conn() as c:c.execute("DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state='working'",(uid,today()))
-   return None,'No source-backed vacancy was found right now. Your search was not used, so please retry.',422
+   return None,'No new, relevant source-backed vacancies were found. Previously shown jobs will not be repeated. Try adjusting preferences or searching later.',422
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
    for position,(score,j,evidence) in enumerate(checked[:12],1):
