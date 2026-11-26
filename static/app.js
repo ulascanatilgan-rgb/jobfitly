@@ -137,6 +137,65 @@ function renderCareerDNA(dna={},feedbackCount=0){
   +(feedbackCount?'<p class="dna-learning-note">JobFitly Learns · '+feedbackCount+' rejected role'+(feedbackCount===1?'':'s')+' remembered.</p>':'')
   +'</section>';
 }
+function renderAlternativeNextMoves(moves=[],selected=[]){
+ if(!Array.isArray(moves)||!moves.length)return '<section class="profile-cv-facts next-moves">'
+  +'<div class="next-moves-head"><div><span class="next-moves-eyebrow">DISCOVER WHAT ELSE YOU COULD DO</span><h2>Alternative Next Move<span class="accent">.</span></h2></div></div>'
+  +'<p class="next-moves-intro">Upload a detailed CV to uncover career directions beyond your current job title.</p></section>';
+ return '<section class="profile-cv-facts next-moves">'
+  +'<div class="next-moves-head"><div><span class="next-moves-eyebrow">YOUR CAREER, REIMAGINED</span><h2>Alternative Next Move<span class="accent">.</span></h2></div>'
+  +'<span class="next-moves-count">03 NEW PATHS</span></div>'
+  +'<p class="next-moves-intro">Three adjacent career directions you might not have considered, based on your CV, skills and work style. Explore them without limiting your regular job search.</p>'
+  +'<div class="next-moves-cards">'+moves.slice(0,3).map((move,i)=>{
+     const has=selected.includes(move.title);
+     const cv=Math.min(100,Math.max(0,Number(move.evidence_score)||0));
+     const style=move.style_score==null?null:Math.min(100,Math.max(0,Number(move.style_score)||0));
+     return '<article class="next-move-card">'
+      +'<div class="next-move-card-top"><span class="next-move-ordinal">0'+(i+1)+'</span><span class="next-move-family">'+esc(move.family)+'</span></div>'
+      +'<h3>'+esc(move.title)+'</h3>'
+      +'<p class="next-move-copy">'+esc(move.description)+'</p>'
+      +'<div class="next-move-signals">'
+      +'<div class="next-move-signal"><div class="next-move-signal-title"><span>CV strength overlap</span><strong>'+cv+'/100</strong></div><div class="next-move-track"><span class="next-move-fill" style="width:'+cv+'%"></span></div></div>'
+      +'<div class="next-move-signal"><div class="next-move-signal-title"><span>Work-style alignment</span><strong>'+(style===null?'Not set':style+'/100')+'</strong></div>'
+      +'<div class="next-move-track"><span class="next-move-fill secondary" style="width:'+(style===null?0:style)+'%"></span></div></div></div>'
+      +'<div class="next-move-tags">'+(move.cv_evidence||[]).slice(0,3).map(t=>'<span>'+esc(t)+'</span>').join('')+'</div>'
+      +'<button class="next-move-add'+(has?' is-added':'')+'" data-path="'+esc(move.title)+'" onclick="addAlternativePath(this.dataset.path)">'
+      +(has?'Added to search ✓':'Add to search +')+'</button>'
+      +'</article>';
+   }).join('')+'</div>'
+  +'<p class="next-moves-footnote">Exploratory suggestions, not advertised vacancies or hiring probabilities. The bars represent indicative evidence signals, not your chance of being hired.</p>'
+  +'</section>';
+}
+async function addAlternativePath(title){
+ const selected=Array.isArray(state.me?.profile?.path_keywords)?state.me.profile.path_keywords:[];
+ if(selected.includes(title)){navigate('search');return;}
+ if(selected.length>=3){notify('Choose up to three alternative paths. Remove one in What you search first.',true);return;}
+ try{
+  const result=await api('/api/profile',{method:'POST',body:JSON.stringify({path_keywords:[...selected,title]})});
+  state.me.profile=result.profile;
+  navigate('search');
+  notify('Added '+title+' to your search focus. CV-based matches remain included.');
+ }catch(error){notify(error.message,true)}
+}
+async function removeAlternativePath(title){
+ const selected=Array.isArray(state.me?.profile?.path_keywords)?state.me.profile.path_keywords:[];
+ try{
+  const result=await api('/api/profile',{method:'POST',body:JSON.stringify({path_keywords:selected.filter(value=>value!==title)})});
+  state.me.profile=result.profile;
+  const target=document.querySelector('[data-selected-path="'+CSS.escape(title)+'"]');
+  if(target)target.remove();
+  const list=$('selected-path-list');
+  if(list&&!list.querySelector('.selected-path-chip'))list.innerHTML='<span class="selected-path-empty">No alternative paths selected yet. Explore Your profile to add one.</span>';
+  notify('Removed from your search focus.');
+ }catch(error){notify(error.message,true)}
+}
+function renderSelectedPathKeywords(paths=[]){
+ return '<div class="selected-paths"><div class="selected-paths-title">SELECTED CAREER DIRECTIONS <span>Optional search focus</span></div>'
+  +'<div id="selected-path-list" class="selected-path-list">'
+  +(paths.length?paths.map(path=>'<span class="selected-path-chip" data-selected-path="'+esc(path)+'">'
+   +'<span>'+esc(path)+'</span><button type="button" data-path="'+esc(path)+'" aria-label="Remove '+esc(path)+'" onclick="removeAlternativePath(this.dataset.path)">×</button></span>').join('')
+   :'<span class="selected-path-empty">No alternative paths selected yet. Explore Your profile to add one.</span>')
+  +'</div><p class="selected-path-hint">We prioritize these directions while continuing to look for other jobs that match your CV.</p></div>';
+}
 function renderProfile(){
  const p=state.me.profile||{},d=p.cv_details||{};
  const label={name:'Name',email:'Email',phone:'Phone',location:'Location',linkedin:'LinkedIn',website:'Website',languages:'Languages',headline:'Professional headline',nationality:'Nationality',date_of_birth:'Date of birth'};
@@ -151,6 +210,7 @@ function renderProfile(){
  +(rows||'<p class="flow-muted">Upload a readable CV to extract your details.</p>')+'</section>'
  +'<section class="profile-cv-facts"><h2>What you are looking for</h2><p>'+esc([p.city,p.country,p.language,...preferences].filter(Boolean).join(' · ')||'Set your job preferences.')+'</p></section>'
  +renderCareerDNA(p.career_dna||{},p.feedback_count||0)
+ +renderAlternativeNextMoves(p.next_moves||[],p.path_keywords||[])
  +'<section class="profile-cv-facts profile-work-style"><h2>Work style</h2>'+renderWorkStyleRadar(p.questions||{})+renderPossibilityScore(p)+'</section>'
  +'<p class="profile-small-note">Your CV remains the source of truth. Confirmed names are used consistently in both PDF documents.</p>'
  +'<button class="subtle-button" style="color:var(--plum)" onclick="deleteAccount()">Delete my account and data ↗</button>';
@@ -286,7 +346,7 @@ function refreshPreferenceMenu(checkbox){
 function renderSearch(){
  const p=state.me.profile;
  const selects=state.config.swipes.map(group=>renderPreferenceMenu(group,p.swipes[group.id])).join('');
- $('main-panel').innerHTML=`<div class="page-kicker">STEP 03 / YOUR SEARCH</div><h1 class="page-heading">What you search<span class="accent">.</span></h1><p class="page-subheading">Your next move, in one view.</p><div class="search-compact-panel"><div class="two-fields search-fields"><label class="field">Country<input id="search-country" autocomplete="country-name" value="${esc(p.country)}" placeholder="Belgium"></label><label class="field">City<input id="search-city" value="${esc(p.city)}" placeholder="Brussels"></label>${languagePicker('search-languages',p.language)}<label class="field">Job keywords<input id="search-keywords" value="${esc(p.keywords)}" placeholder="Operations, client relations"></label></div><div class="search-section-label">YOUR PREFERENCES</div><div class="search-preferences-grid">${selects}</div><button class="btn btn-dark search-save-button" onclick="saveSearch()">Save preferences ↗</button></div>`;
+ $('main-panel').innerHTML=`<div class="page-kicker">STEP 03 / YOUR SEARCH</div><h1 class="page-heading">What you search<span class="accent">.</span></h1><p class="page-subheading">Your next move, in one view.</p><div class="search-compact-panel"><div class="two-fields search-fields"><label class="field">Country<input id="search-country" autocomplete="country-name" value="${esc(p.country)}" placeholder="Belgium"></label><label class="field">City<input id="search-city" value="${esc(p.city)}" placeholder="Brussels"></label>${languagePicker('search-languages',p.language)}<label class="field">Job keywords<input id="search-keywords" value="${esc(p.keywords)}" placeholder="Operations, client relations"></label></div>${renderSelectedPathKeywords(p.path_keywords||[])}<div class="search-section-label">YOUR PREFERENCES</div><div class="search-preferences-grid">${selects}</div><button class="btn btn-dark search-save-button" onclick="saveSearch()">Save preferences ↗</button></div>`;
 }
 function pickSearch(button){document.querySelectorAll('[data-choice="'+button.dataset.choice+'"]').forEach(b=>b.classList.toggle('selected',b===button));}
 async function saveSearch(){
