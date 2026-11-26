@@ -322,6 +322,39 @@ function selectedPreferenceValues(value){
  const array=Array.isArray(value)?value:typeof value==='string'?[value]:[];
  return [...new Set(array.filter(v=>typeof v==='string'&&v.trim()&&!isNeutralPreference(v)))];
 }
+function searchKeywordValues(value){
+ return [...new Set(String(value||'').split(/[,;\n]+/).map(v=>v.trim()).filter(Boolean))].slice(0,12);
+}
+function renderSearchKeywordChips(value){
+ const items=searchKeywordValues(value);
+ return '<div id="search-keyword-list" class="selected-path-list search-keyword-list">'
+  +(items.length?items.map(word=>'<span class="selected-path-chip search-keyword-chip" data-search-keyword="'+esc(word)+'"><span>'+esc(word)+'</span><button type="button" data-keyword="'+esc(word)+'" aria-label="Remove '+esc(word)+'" onclick="removeSearchKeyword(this.dataset.keyword)">×</button></span>').join('')
+  :'<span class="selected-path-empty" id="search-keyword-empty">Add one or more job keywords.</span>')
+  +'</div>';
+}
+function addSearchKeyword(){
+ const input=$('search-keywords');
+ if(!input)return;
+ const additions=searchKeywordValues(input.value);
+ if(!additions.length)return;
+ const list=$('search-keyword-list');
+ const existing=[...list.querySelectorAll('[data-search-keyword]')].map(el=>el.dataset.searchKeyword);
+ const merged=[...new Set([...existing,...additions])].slice(0,12);
+ list.innerHTML=merged.map(word=>'<span class="selected-path-chip search-keyword-chip" data-search-keyword="'+esc(word)+'"><span>'+esc(word)+'</span><button type="button" data-keyword="'+esc(word)+'" aria-label="Remove '+esc(word)+'" onclick="removeSearchKeyword(this.dataset.keyword)">×</button></span>').join('');
+ input.value='';
+ input.focus();
+}
+function removeSearchKeyword(word){
+ const chip=[...document.querySelectorAll('[data-search-keyword]')].find(el=>el.dataset.searchKeyword===word);
+ if(chip)chip.remove();
+ const list=$('search-keyword-list');
+ if(list&&!list.querySelector('[data-search-keyword]'))list.innerHTML='<span class="selected-path-empty" id="search-keyword-empty">Add one or more job keywords.</span>';
+}
+function collectSearchKeywords(){
+ const saved=[...document.querySelectorAll('[data-search-keyword]')].map(el=>el.dataset.searchKeyword);
+ const pending=searchKeywordValues($('search-keywords')?.value||'');
+ return [...new Set([...saved,...pending])].slice(0,12).join(', ');
+}
 function renderPreferenceMenu(group,oldValue){
  const selected=selectedPreferenceValues(oldValue);
  const options=group.choices.filter(ch=>!isNeutralPreference(ch));
@@ -343,10 +376,15 @@ function refreshPreferenceMenu(checkbox){
  const label=container.querySelector('[data-pref-summary]');
  label.textContent=values.length?values.length===1?values[0]:values.length+' selected':'Any';
 }
+document.addEventListener('click',event=>{
+ document.querySelectorAll('details.multi-pref[open]').forEach(menu=>{
+  if(!menu.contains(event.target))menu.removeAttribute('open');
+ });
+});
 function renderSearch(){
  const p=state.me.profile;
  const selects=state.config.swipes.map(group=>renderPreferenceMenu(group,p.swipes[group.id])).join('');
- $('main-panel').innerHTML=`<div class="page-kicker">STEP 03 / YOUR SEARCH</div><h1 class="page-heading">What you search<span class="accent">.</span></h1><p class="page-subheading">Your next move, in one view.</p><div class="search-compact-panel"><div class="two-fields search-fields"><label class="field">Country<input id="search-country" autocomplete="country-name" value="${esc(p.country)}" placeholder="Belgium"></label><label class="field">City<input id="search-city" value="${esc(p.city)}" placeholder="Brussels"></label>${languagePicker('search-languages',p.language)}<label class="field">Job keywords<input id="search-keywords" value="${esc(p.keywords)}" placeholder="Operations, client relations"></label></div>${renderSelectedPathKeywords(p.path_keywords||[])}<div class="search-section-label">YOUR PREFERENCES</div><div class="search-preferences-grid">${selects}</div><button class="btn btn-dark search-save-button" onclick="saveSearch()">Save preferences ↗</button></div>`;
+ $('main-panel').innerHTML=`<div class="page-kicker">STEP 03 / YOUR SEARCH</div><h1 class="page-heading">What you search<span class="accent">.</span></h1><p class="page-subheading">Your next move, in one view.</p><div class="search-compact-panel"><div class="two-fields search-fields"><label class="field">Country<input id="search-country" autocomplete="country-name" value="${esc(p.country)}" placeholder="Belgium"></label><label class="field">City<input id="search-city" value="${esc(p.city)}" placeholder="Brussels"></label>${languagePicker('search-languages',p.language)}<label class="field search-keyword-field">Job keywords<div class="search-keyword-entry"><input id="search-keywords" value="" placeholder="Operations, client relations" onkeydown="if(event.key==='Enter'){event.preventDefault();addSearchKeyword()}"><button type="button" class="search-keyword-add" onclick="addSearchKeyword()">Add</button></div>${renderSearchKeywordChips(p.keywords)}</label></div>${renderSelectedPathKeywords(p.path_keywords||[])}<div class="search-section-label">YOUR PREFERENCES</div><div class="search-preferences-grid">${selects}</div><button class="btn btn-dark search-save-button" onclick="saveSearch()">Save preferences ↗</button></div>`;
 }
 function pickSearch(button){document.querySelectorAll('[data-choice="'+button.dataset.choice+'"]').forEach(b=>b.classList.toggle('selected',b===button));}
 async function saveSearch(){
@@ -355,7 +393,7 @@ async function saveSearch(){
   const chosen=[...group.querySelectorAll('input[type="checkbox"]:checked')].map(el=>el.value);
   if(chosen.length)swipes[group.dataset.preferenceField]=chosen;
  });
- const data={country:$('search-country').value.trim(),city:$('search-city').value.trim(),language:chosenLanguages('search-languages'),keywords:$('search-keywords').value.trim(),swipes};
+ const data={country:$('search-country').value.trim(),city:$('search-city').value.trim(),language:chosenLanguages('search-languages'),keywords:collectSearchKeywords(),swipes};
  
  try{const r=await api('/api/profile',{method:'POST',body:JSON.stringify(data)});state.me.profile=r.profile;state.swipes={...r.profile.swipes};notify('Preferences saved. Your next search will use these choices.');}catch(e){notify(e.message,true);}
 }
