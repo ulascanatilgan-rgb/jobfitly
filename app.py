@@ -317,11 +317,14 @@ def preview_candidates(uid,max_results=5):
   if selected and mandatory and not mandatory.issubset(selected):continue
   fit,terms=lexical_fit(job,cv)
   dna_fit=role_similarity(job,dna)
-  if fit<20 and dna_fit<45:continue
+  path_fit=path_title_match(job,p.get('path_keywords'))
+  overlap=len(tokenize(job.get('description','')) & tokenize(cv))
+  if fit<20 and dna_fit<45 and not (path_fit>=.7 and overlap>=2):continue
+  if path_fit>=.7 and overlap>=2:fit=max(fit,44)
   alignment=preference_alignment(job,p.get('swipes'))
   if alignment is None:weighted=.82*(fit/10)+.18*(dna_fit/10)
   else:weighted=.65*(fit/10)+.25*alignment+.10*(dna_fit/10)
-  score=round(max(1,min(9.8,weighted-feedback_penalty(job,feedback))),1)
+  score=round(max(1,min(9.8,weighted+path_fit*1.1-feedback_penalty(job,feedback))),1)
   results.append(dict(job,score=score,matched_terms=terms))
  results.sort(key=lambda item:item['score'],reverse=True)
  unique=[];taken=set()
@@ -403,7 +406,9 @@ def fetch_candidates(profile):
                      r'Türkiye|Spain|Italy|Portugal|Poland|Canada)\b',place,re.I)
   if detected:original['country']=detected.group()
  focus=_role_queries(cv,original.get('keywords'))
- original['search_focus']='; '.join(focus[:3]) or '; '.join(_related_role_focus(cv))
+ chosen=valid_path_titles(original.get('path_keywords'))
+ original['search_focus']='; '.join((chosen+focus)[:6]) or '; '.join(_related_role_focus(cv))
+ original['path_keywords']=chosen
  original['search_scope']='Source-backed CV-related roles, national and eligible remote'
  unique={};errors=[]
  def merge(rows):
@@ -432,7 +437,9 @@ def fetch_candidates(profile):
  dna=original.get('career_dna') or career_dna(cv)
  related=sum(1 for job in unique.values()
              if specialty_fit(job.get('title'),cv)
-             and (lexical_fit(job,cv)[0]>=35 or role_similarity(job,dna)>=55))
+             and (lexical_fit(job,cv)[0]>=35 or role_similarity(job,dna)>=55
+                  or (path_title_match(job,chosen)>=.7
+                      and len(tokenize(job.get('description',''))&tokenize(cv))>=2)))
  # Existing billable web search is an optional fallback; skip it when the
  # shared free sources already provide enough plausible CV-backed positions.
  if related<16 and os.getenv('OPENAI_API_KEY'):
@@ -510,6 +517,13 @@ def run_search(uid):
    if allowed_languages and mandatory_languages and not mandatory_languages.issubset(allowed_languages):continue
    if not specialty_fit(j.get('title'),p['cv_for_matching']):continue
    cv_fit,evidence=lexical_fit(j,p['cv_for_matching'])
+   path_fit=path_title_match(j,p.get('path_keywords'))
+   path_overlap=sorted(tokenize(j.get('description',''))&tokenize(p['cv_for_matching']))
+   # Exploratory role titles may differ from past titles, but the actual duties
+   # still need independent evidence from the user's uploaded CV.
+   if path_fit>=.7 and len(path_overlap)>=2:
+    cv_fit=max(cv_fit,44+min(8,2*len(path_overlap)))
+    evidence=evidence or path_overlap[:6]
    if cv_fit<56:
     # Keep genuinely adjacent roles when CV evidence matches their actual duties.
     overlap=sorted(tokenize(j.get('description','')) & tokenize(p['cv_for_matching']))
@@ -536,7 +550,10 @@ def run_search(uid):
    # OR within each preference field, weighted across fields; CV remains primary.
    if alignment is None:weighted=.82*(cv_score/10)+.18*(dna_score/10)
    else:weighted=.65*(cv_score/10)+.25*alignment+.10*(dna_score/10)
-   final=round(max(1,min(9.8,weighted-negative)),1)
+   # Selected adjacent paths get a modest preference boost, not a hard
+   # constraint; other proven CV matches remain eligible for the five slots.
+   path_bonus=path_title_match(j,p.get('path_keywords'))*1.05
+   final=round(max(1,min(9.8,weighted+path_bonus-negative)),1)
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
   distinct=[];taken=set()
