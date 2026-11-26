@@ -16,22 +16,37 @@
     if(id==="watch" && state.watch.length)return (state.watch.length+" saved");
     return "";
   }
+  function compactHomeRadar(profile){
+    var answers=profile.questions||{};
+    if(Object.keys(answers).length<20)return '';
+    var original=renderWorkStyleRadar(answers);
+    var graphic=original.match(/<svg\b[^>]*>[\s\S]*?<\/svg>/);
+    if(!graphic)return '';
+    var displayName=String(profile.name||(profile.cv_details||{}).name||'').trim();
+    var label=displayName||'Your profile';
+    return '<aside class="flow-home-mini" aria-label="Work style profile for '+esc(label)+'">'
+      +graphic[0]
+      +'<div class="flow-home-person">'+esc(label)+'</div></aside>';
+  }
   window.renderFlowHome=function(){
     var p=state.me && state.me.profile || {};
     var html=steps.map(function(step){
       var status=indicator(step.id);
       var desc=(step.id==="cv" && p.has_cv) ? ("Uploaded: "+(p.cv_name||"CV")):step.desc;
-      return '<button type="button" class="flow-step" onclick="navigate(&quot;'+step.id+'&quot;)">' +
-        '<span class="flow-step-number">'+step.num+'</span>' +
-        '<span class="flow-step-copy"><strong>'+esc(step.title)+'</strong><small>'+esc(desc)+'</small></span>' +
-        (status?'<span class="flow-step-status">'+esc(status)+'</span>':'') +
-        '<span class="flow-step-arrow" aria-hidden="true">↗</span></button>';
+      return '<button type="button" class="flow-step" onclick="navigate(&quot;'+step.id+'&quot;)">'
+        +'<span class="flow-step-number">'+step.num+'</span>'
+        +'<span class="flow-step-copy"><strong>'+esc(step.title)+'</strong><small>'+esc(desc)+'</small></span>'
+        +(status?'<span class="flow-step-status">'+esc(status)+'</span>':'')
+        +'<span class="flow-step-arrow" aria-hidden="true">↗</span></button>';
     }).join("");
+    var mini=compactHomeRadar(p);
     $("main-panel").innerHTML=
-      '<div class="flow-home-intro"><div class="flow-home-overline">YOUR JOB SEARCH</div>' +
-      '<h1>One step at a time<span>.</span></h1>' +
-      '<p>Start with your CV. Move through each step when you are ready.</p></div>' +
-      '<div class="flow-steps" aria-label="Five steps to finding a job">'+html+'</div>';
+      '<div class="flow-home-top'+(mini?' has-radar':'')+'">'
+      +'<div class="flow-home-intro"><div class="flow-home-overline">YOUR JOB SEARCH</div>'
+      +'<h1>Time to boost<br>your career<span>.</span></h1>'
+      +'<p>Start with your CV. Move through each step when you are ready.</p></div>'
+      +mini+'</div>'
+      +'<div class="flow-steps" aria-label="Five steps to finding a job">'+html+'</div>';
   };
   window.renderFlowResults=function(){
     var p=state.me && state.me.profile || {};
