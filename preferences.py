@@ -81,6 +81,7 @@ def preference_alignment(job,raw):
  weight_total=0.0
  for field,values in preferences.items():
   if field not in CHOICES:continue
+  if not any(CHOICES[field].get(value) for value in values):continue
   weight=WEIGHTS.get(field,1)
   best=0.0
   for value in values:

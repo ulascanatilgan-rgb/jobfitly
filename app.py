@@ -317,7 +317,13 @@ def preview_candidates(uid,max_results=5):
   score=round(max(1,min(9.8,weighted-feedback_penalty(job,feedback))),1)
   results.append(dict(job,score=score,matched_terms=terms))
  results.sort(key=lambda item:item['score'],reverse=True)
- return results[:max_results]
+ unique=[];taken=set()
+ for item in results:
+  keys=_job_keys(item)
+  if any(k in taken for k in keys):continue
+  unique.append(item);taken.update(keys)
+  if len(unique)>=max_results:break
+ return unique
 
 def _parsed_date(value):
  if not value:return None
@@ -526,7 +532,14 @@ def run_search(uid):
    final=round(max(1,min(9.8,weighted-negative)),1)
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
-  shortlist=ranked[:35]
+  distinct=[];taken=set()
+  for entry in ranked:
+   keys=_job_keys(entry[1])
+   if any(key in taken for key in keys):continue
+   distinct.append(entry)
+   taken.update(keys)
+   if len(distinct)>=35:break
+  shortlist=distinct
   # Feed-backed listings are sourced directly from active provider APIs; avoid
   # redundant per-link HTTP checks that routinely get bot-blocked or time out.
   trusted={'Himalayas','Jobicy','Arbeitnow','Greenhouse','Lever','Ashby','Adzuna'}
