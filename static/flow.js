@@ -1,4 +1,4 @@
-/* JobFitly five-step interface; history lives under the personal profile. */
+/* Waydefine five-step interface; history lives under the personal profile. */
 (function () {
   var steps = [
     {id:"cv",num:"1",title:"Upload your CV",desc:"Your career experience comes first."},
