@@ -199,12 +199,17 @@ def discover_feed_jobs(profile):
     code=_country_code(profile.get("country"))
     cv=str(profile.get("cv_for_matching") or profile.get("cv_text_preview") or "")
     queries=_role_queries(cv,profile.get("keywords"))
-    tasks=[("jobicy",lambda:_jobicy(profile,code)),
-           ("himalayas",lambda:_himalayas(profile,code,queries[0] if queries else ""))]
-    if len(queries)>1:
-        tasks.append(("himalayas2",lambda:_himalayas(profile,code,queries[1])))
-    elif code:
-        tasks.append(("himalayas2",lambda:_himalayas(profile,code)))
+    from next_moves import valid_path_titles
+    selected=valid_path_titles(profile.get("path_keywords"))
+    # Preserve a CV-grounded broad query even when exploratory paths are chosen.
+    focus=[*selected[:2],*(queries[:1] if queries else [])]
+    if not focus:focus=queries[:2]
+    focus=list(dict.fromkeys(focus))[:3]
+    tasks=[("jobicy",lambda:_jobicy(profile,code))]
+    for i,phrase in enumerate(focus):
+        tasks.append(("himalayas"+str(i),lambda q=phrase:_himalayas(profile,code,q)))
+    if not focus and code:
+        tasks.append(("himalayas-default",lambda:_himalayas(profile,code))
     if code:tasks.extend([("arbeitnow1",lambda:_arbeitnow(profile,code,1)),
                           ("arbeitnow2",lambda:_arbeitnow(profile,code,2))])
     result=[];errors=[]

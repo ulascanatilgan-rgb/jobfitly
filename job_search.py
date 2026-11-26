@@ -106,6 +106,7 @@ def search_jobs(profile, max_age_days=14):
         "city": str(profile.get("city") or "")[:90],
         "languages": sorted(selected_languages(profile.get("language"))),
         "keywords": str(profile.get("keywords") or "")[:240],
+        "selected_adjacent_career_paths": (profile.get("path_keywords") or [])[:3],
         "preferences": profile.get("swipes") or {},
         "self_ratings": profile.get("questions") or {},
         "cv_excerpt_with_contact_removed": _safe_cv_excerpt(profile),
@@ -119,6 +120,11 @@ def search_jobs(profile, max_age_days=14):
         "work style are secondary. Never recommend an HR Director role to a security, " 
         "audit, banking, or operations professional without HR leadership experience. " 
         "Avoid roles with unrelated professional licenses or unrelated core specialisms. " 
+        "If selected_adjacent_career_paths contains titles, actively explore relevant open jobs "
+        "in those directions, verifying transferable CV evidence for each role. "
+        "Treat these as priorities, NOT mandatory filters: include other CV-relevant "
+        "roles when those paths have few or no real vacancies. "
+        "Never infer credentials from a selected path or invent openings. "
         "Diversify directly transferable titles and related job families grounded in the CV. Use direct employer job pages, "
         "Greenhouse, Lever, Workday, Teamtailor, SmartRecruiters or official boards. "
         "Use the CV as primary evidence. Unspecified preferences are entirely optional. "
