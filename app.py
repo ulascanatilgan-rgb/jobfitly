@@ -9,6 +9,7 @@ from job_search import search_jobs, selected_languages, required_languages
 from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
+from next_moves import alternative_next_moves, valid_path_titles, path_title_match
 from shared_inventory import prepare_inventory, shared_jobs, refresh_shared
 from preferences import normalize_preferences, preference_alignment
 from cv_profile import extract_cv_details, is_plausible_person_name
@@ -134,6 +135,8 @@ def init_db():
    for key in _job_keys(dict(prior)):
     c.execute('INSERT OR IGNORE INTO seen_jobs(user_id,job_key,first_seen_at) VALUES (?,?,?)',
               (prior['user_id'],key,datetime.datetime.now(datetime.timezone.utc).isoformat()))
+  if 'path_keywords' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
+   c.execute("ALTER TABLE profiles ADD COLUMN path_keywords TEXT NOT NULL DEFAULT '[]'")
   if 'career_dna' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
    c.execute("ALTER TABLE profiles ADD COLUMN career_dna TEXT NOT NULL DEFAULT '{}'")
   if 'cv_details' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
@@ -209,6 +212,10 @@ def profile_for(uid):
   dna=career_dna(d['cv_text'][:18000])
   with conn() as fix:fix.execute('UPDATE profiles SET career_dna=? WHERE user_id=?',(json.dumps(dna,ensure_ascii=False),uid))
  d['career_dna']=dna
+ try:paths=json.loads(d.get('path_keywords') or '[]')
+ except (ValueError,TypeError):paths=[]
+ d['path_keywords']=valid_path_titles(paths)
+ d['next_moves']=alternative_next_moves(d['cv_text'],dna,d['questions'],d['swipes'],d.get('keywords'))
  with conn() as count:
   d['feedback_count']=count.execute('SELECT COUNT(*) FROM job_feedback WHERE user_id=?',(uid,)).fetchone()[0]
  d['name']=d['cv_details'].get('name','')
@@ -616,10 +623,19 @@ def me():
 @app.post('/api/profile')
 @auth_required
 def update_profile():
- d=request.get_json(silent=True) or {};uid=session['uid']; allowed={'name','country','city','language','keywords','questions','swipes'}
+ d=request.get_json(silent=True) or {};uid=session['uid']; allowed={'name','country','city','language','keywords','questions','swipes','path_keywords'}
  values={k:v for k,v in d.items() if k in allowed}
  for k in ['name','country','city','language','keywords']:
   if k in values:values[k]=str(values[k])[:500]
+ if 'path_keywords' in values:
+  paths=values['path_keywords']
+  if not isinstance(paths,list) or len(paths)>3:return jsonify(error='Choose at most three career paths.'),400
+  current=profile_for(uid)
+  selectable={item['title'] for item in current.get('next_moves',[])}|set(current.get('path_keywords',[]))
+  checked=valid_path_titles(paths)
+  if len(checked)!=len(paths) or any(title not in selectable for title in checked):
+   return jsonify(error='Choose paths suggested for your CV.'),400
+  values['path_keywords']=json.dumps(checked,ensure_ascii=False)
  for k in ['questions','swipes']:
   if k in values:
    if not isinstance(values[k],dict):return jsonify(error=f'Invalid {k}.'),400
