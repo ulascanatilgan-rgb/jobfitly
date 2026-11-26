@@ -366,14 +366,14 @@ def _check_live(job):
  url=job.get('url','')
  if not _valid_public_link(url):return False
  try:
-  r=requests.get(url,timeout=(2,4),headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
+  r=requests.get(url,timeout=(2,4),headers={'User-Agent':'Waydefine/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
   # Avoid arbitrary redirects to internal hosts; follow only public HTTPS destinations.
   for _ in range(2):
    if r.status_code not in (301,302,303,307,308):break
    nxt=requests.compat.urljoin(r.url,r.headers.get('Location',''))
    r.close()
    if not _valid_public_link(nxt):return False
-   r=requests.get(nxt,timeout=(2,4),headers={'User-Agent':'JobFitly/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
+   r=requests.get(nxt,timeout=(2,4),headers={'User-Agent':'Waydefine/0.2 (+job-discovery; availability-check)'},stream=True,allow_redirects=False)
   good=r.status_code==200
   r.close()
   return good
@@ -906,7 +906,7 @@ def download_kit(job_id,kind):
  safe=re.sub(r'[^a-zA-Z0-9_-]+','_',r['company'])[:45]
  buf=io.BytesIO(data)
  preview=request.args.get('view')=='1'
- response=send_file(buf,as_attachment=not preview,download_name=f'JobFitly_{kind}_{safe}_{job_id}.pdf',mimetype='application/pdf')
+ response=send_file(buf,as_attachment=not preview,download_name=f'Waydefine_{kind}_{safe}_{job_id}.pdf',mimetype='application/pdf')
  response.headers['Cache-Control']='private, no-store'
  response.headers['X-Content-Type-Options']='nosniff'
  return response
