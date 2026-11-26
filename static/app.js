@@ -250,18 +250,49 @@ function renderCV(){const p=state.me.profile;$('main-panel').innerHTML=`<div cla
 async function saveCV(){const file=$('cv-edit-file').files[0];if(!file){notify('Select a file.',true);return}let fd=new FormData();fd.append('file',file);try{const r=await api('/api/cv',{method:'POST',body:fd});state.me.profile=r.profile;notify('CV saved. Personal details were extracted into Your profile.');renderCV()}catch(e){notify(e.message,true)}}
 function renderSkills(){const p=state.me.profile;const qs=state.config.questions;$('main-panel').innerHTML=`<div class="page-kicker">WORK STYLE</div><h1 class="page-heading">Work Style<span class="accent">.</span></h1><p class="page-subheading">Rate yourself from 0 to 10.</p><div class="skills-grid">${qs.map((q,i)=>{const v=p.questions[q.id]??5;return `<label class="skill-item"><span>${String(i+1).padStart(2,'0')} · ${esc(q.text)}</span><strong id="v-${q.id}">${v}/10</strong><input data-skill="${q.id}" type="range" min="0" max="10" value="${v}" oninput="$('v-${q.id}').textContent=this.value+'/10'"></label>`}).join('')}</div><button class="btn btn-dark margin-top" onclick="saveSkills()">Save Work Style →</button>`;}
 async function saveSkills(){const qs={};document.querySelectorAll('[data-skill]').forEach(x=>qs[x.dataset.skill]=Number(x.value));try{const r=await api('/api/profile',{method:'POST',body:JSON.stringify({questions:qs})});state.me.profile=r.profile;notify('Work Style saved.')}catch(e){notify(e.message,true)}}
+function isNeutralPreference(v){
+ return ['Open to all','No preference','Flexible','Any',''].includes(String(v||''));
+}
+function selectedPreferenceValues(value){
+ const array=Array.isArray(value)?value:typeof value==='string'?[value]:[];
+ return [...new Set(array.filter(v=>typeof v==='string'&&v.trim()&&!isNeutralPreference(v)))];
+}
+function renderPreferenceMenu(group,oldValue){
+ const selected=selectedPreferenceValues(oldValue);
+ const options=group.choices.filter(ch=>!isNeutralPreference(ch));
+ const labels=selected.length?selected.length===1?selected[0]:selected.length+' selected':'Any';
+ return '<details class="multi-pref" data-preference-field="'+esc(group.id)+'">'
+ +'<summary><span class="multi-pref-title">'+esc(group.label)+'</span>'
+ +'<span class="multi-pref-summary" data-pref-summary>'+esc(labels)+'</span>'
+ +'<span class="multi-pref-chevron" aria-hidden="true">⌄</span></summary>'
+ +'<div class="multi-pref-options" role="group" aria-label="'+esc(group.label)+'">'
+ +options.map(ch=>'<label class="multi-pref-item"><input type="checkbox" value="'+esc(ch)+'" '
+ +(selected.includes(ch)?'checked ':'')+'onchange="refreshPreferenceMenu(this)">'
+ +'<span>'+esc(ch)+'</span></label>').join('')
+ +'</div></details>';
+}
+function refreshPreferenceMenu(checkbox){
+ const container=checkbox.closest('[data-preference-field]');
+ if(!container)return;
+ const values=[...container.querySelectorAll('input[type="checkbox"]:checked')].map(el=>el.value);
+ const label=container.querySelector('[data-pref-summary]');
+ label.textContent=values.length?values.length===1?values[0]:values.length+' selected':'Any';
+}
 function renderSearch(){
  const p=state.me.profile;
- const selects=state.config.swipes.map(s=>`<label class="field search-preference"><span>${esc(s.label)}</span><select data-preference="${esc(s.id)}" aria-label="${esc(s.label)}"><option value="" ${!p.swipes[s.id]?'selected':''}>Any</option>${s.choices.map(ch=>`<option value="${esc(ch)}" ${p.swipes[s.id]===ch?'selected':''}>${esc(ch)}</option>`).join('')}</select></label>`).join('');
+ const selects=state.config.swipes.map(group=>renderPreferenceMenu(group,p.swipes[group.id])).join('');
  $('main-panel').innerHTML=`<div class="page-kicker">STEP 03 / YOUR SEARCH</div><h1 class="page-heading">What you search<span class="accent">.</span></h1><p class="page-subheading">Your next move, in one view.</p><div class="search-compact-panel"><div class="two-fields search-fields"><label class="field">Country<input id="search-country" autocomplete="country-name" value="${esc(p.country)}" placeholder="Belgium"></label><label class="field">City<input id="search-city" value="${esc(p.city)}" placeholder="Brussels"></label>${languagePicker('search-languages',p.language)}<label class="field">Job keywords<input id="search-keywords" value="${esc(p.keywords)}" placeholder="Operations, client relations"></label></div><div class="search-section-label">YOUR PREFERENCES</div><div class="search-preferences-grid">${selects}</div><button class="btn btn-dark search-save-button" onclick="saveSearch()">Save preferences ↗</button></div>`;
 }
 function pickSearch(button){document.querySelectorAll('[data-choice="'+button.dataset.choice+'"]').forEach(b=>b.classList.toggle('selected',b===button));}
 async function saveSearch(){
  const swipes={};
- document.querySelectorAll('[data-preference]').forEach(el=>{if(el.value)swipes[el.dataset.preference]=el.value;});
+ document.querySelectorAll('[data-preference-field]').forEach(group=>{
+  const chosen=[...group.querySelectorAll('input[type="checkbox"]:checked')].map(el=>el.value);
+  if(chosen.length)swipes[group.dataset.preferenceField]=chosen;
+ });
  const data={country:$('search-country').value.trim(),city:$('search-city').value.trim(),language:chosenLanguages('search-languages'),keywords:$('search-keywords').value.trim(),swipes};
  
- try{const r=await api('/api/profile',{method:'POST',body:JSON.stringify(data)});state.me.profile=r.profile;notify('Preferences saved.');}catch(e){notify(e.message,true);}
+ try{const r=await api('/api/profile',{method:'POST',body:JSON.stringify(data)});state.me.profile=r.profile;state.swipes={...r.profile.swipes};notify('Preferences saved. Your next search will use these choices.');}catch(e){notify(e.message,true);}
 }
 async function renderHistory(){
  const el=$('main-panel');
