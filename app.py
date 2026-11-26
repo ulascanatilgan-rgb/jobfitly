@@ -10,6 +10,7 @@ from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
 from shared_inventory import prepare_inventory, shared_jobs, refresh_shared
+from preferences import normalize_preferences, preference_alignment
 from cv_profile import extract_cv_details, is_plausible_person_name
 from pdf_documents import motivation_pdf, tailored_cv_pdf as detailed_cv_pdf
 from pdf_cv_sidebar import tailored_cv_pdf
@@ -75,6 +76,32 @@ def conn():
  finally:
   c.close()
 
+def _job_keys(job):
+ """Stable URL plus company/title/location fingerprint; no CV data stored."""
+ parsed=urlparse(str(job.get('url') or '').strip())
+ canonical=(parsed.netloc.lower()+parsed.path.rstrip('/').lower()) if parsed.netloc else ''
+ if parsed.query and len(parsed.path.strip('/'))<5:
+  canonical+='?'+parsed.query.lower()
+ base='|'.join(re.sub(r'\W+',' ',str(job.get(k) or '').casefold()).strip()
+               for k in ('company','title','city','country'))
+ return tuple(key for key in (('url:'+canonical if canonical else ''),('role:'+base if base.strip('| ' ) else '')) if key)
+
+def previously_seen(uid):
+ with conn() as c:
+  return {row['job_key'] for row in c.execute('SELECT job_key FROM seen_jobs WHERE user_id=?',(uid,))}
+
+def remember_displayed(uid,jobs):
+ if not jobs:return
+ stamp=now()
+ with conn() as c:
+  for job in jobs:
+   for key in _job_keys(job):
+    c.execute('INSERT OR IGNORE INTO seen_jobs(user_id,job_key,first_seen_at) VALUES(?,?,?)',
+              (uid,key,stamp))
+
+def is_seen(job,keys):
+ return any(key in keys for key in _job_keys(job))
+
 def init_db():
  with conn() as c:
   c.executescript('''
@@ -94,8 +121,19 @@ def init_db():
     url TEXT NOT NULL,title TEXT NOT NULL,company TEXT NOT NULL,
     created_at TEXT NOT NULL,PRIMARY KEY(user_id,url));
    CREATE INDEX IF NOT EXISTS ix_job_feedback_user ON job_feedback(user_id);
+   CREATE TABLE IF NOT EXISTS seen_jobs(
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_key TEXT NOT NULL,first_seen_at TEXT NOT NULL,
+    PRIMARY KEY(user_id,job_key));
   ''')
   prepare_inventory(c)
+  # Migrate previously displayed top-five roles into durable history. Keep
+  # the record even when users later clear earlier search runs.
+  for prior in c.execute("""SELECT DISTINCT j.user_id,j.url,j.title,j.company,j.city,j.country
+      FROM run_jobs r JOIN jobs j ON j.id=r.job_id WHERE r.position<=5""").fetchall():
+   for key in _job_keys(dict(prior)):
+    c.execute('INSERT OR IGNORE INTO seen_jobs(user_id,job_key,first_seen_at) VALUES (?,?,?)',
+              (prior['user_id'],key,now()))
   if 'career_dna' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
    c.execute("ALTER TABLE profiles ADD COLUMN career_dna TEXT NOT NULL DEFAULT '{}'")
   if 'cv_details' not in {row['name'] for row in c.execute('PRAGMA table_info(profiles)')}:
@@ -162,7 +200,7 @@ def profile_for(uid):
  verified_cv_details(uid)
  with conn() as c:row=c.execute('SELECT * FROM profiles WHERE user_id=?',(uid,)).fetchone()
  d=dict(row)
- d['questions']=json.loads(d['questions'] or '{}');d['swipes']=json.loads(d['swipes'] or '{}')
+ d['questions']=json.loads(d['questions'] or '{}');d['swipes']=normalize_preferences(json.loads(d['swipes'] or '{}'))
  d['has_cv']=bool(d['cv_text']);d['cv_text_preview']=d['cv_text'][:3200]
  d['cv_details']=json.loads(d.get('cv_details') or '{}')
  try:dna=json.loads(d.get('career_dna') or '{}')
@@ -218,35 +256,9 @@ def score_job(job,p):
   if isinstance(value,(int,float)) and any(word in text for word in phrases):
    if value>=7:score+=0.075
    elif value<=3:score-=0.075
- role=pref.get('role_type','')
- role_terms={'Operations & strategy':('operation','strateg','project','program'),
-             'People & relationships':('client','sales','customer','partnership','relationship'),
-             'Analytical':('analysis','analyst','data','audit','finance','risk'),
-             'Creative & product':('product','design','creativ','brand','marketing')}
- if role in role_terms:
-  score+=0.65 if any(w in text for w in role_terms[role]) else -0.5
- sector=pref.get('sector','')
- sectors={'Technology':('software','technology','ai ','engineering','cloud','saas'),
-          'Finance':('bank','finance','investment','fintech','insurance'),
-          'Healthcare':('medical','health','pharma','clinical','patient'),
-          'Creative':('design','artist','marketing','creative','studio','museum')}
- if sector in sectors:score+=0.45 if any(w in text for w in sectors[sector]) else -0.25
- mode=pref.get('mode','')
- if mode in ('Remote','Hybrid','On-site'):
-  hints={'Remote':('remote','work from home'), 'Hybrid':('hybrid','flexible work'), 'On-site':('on-site','on site','office-based')}
-  if any(w in text for w in hints[mode]):score+=0.3
-  elif mode=='Remote' and 'on-site' in text:score-=0.45
- level=pref.get('seniority','')
- if level=='Manager':score+=0.35 if any(w in title for w in ('manager','lead','head')) else -0.15
- if level=='Leadership':score+=0.35 if any(w in title for w in ('director','head','chief','vp ','lead')) else -0.2
- if level=='Specialist':score+=0.25 if any(w in title for w in ('specialist','associate','analyst','advisor')) else 0
- priority=pref.get('priority','')
- if priority=='Growth' and any(w in text for w in ('growth','scale','build','leadership')):score+=0.15
- if priority=='Balance' and any(w in text for w in ('flexible','hybrid','work-life')):score+=0.15
- if priority=='Security' and any(w in text for w in ('permanent','stable','long-term')):score+=0.15
- environment=pref.get('environment','')
- if environment=='Startup' and any(w in text for w in ('startup','start-up','early-stage')):score+=0.3
- if environment=='Established company' and any(w in text for w in ('global','multinational','established')):score+=0.3
+ alignment=preference_alignment(job,pref)
+ if alignment is not None:
+  score+=0.22*(alignment-5)
  return round(max(1.5,min(9.8,score)),1),matches[:6]
 
 def get_jobs(uid,watch_only=False):
@@ -590,7 +602,7 @@ def update_profile():
   if k in values:
    if not isinstance(values[k],dict):return jsonify(error=f'Invalid {k}.'),400
    if k=='questions': values[k]={key:max(0,min(10,int(value))) for key,value in values[k].items() if key in {x[0] for x in QUESTIONS} and isinstance(value,(int,float))}
-   if k=='swipes':values[k]={key:str(value)[:120] for key,value in values[k].items() if key in {x[0] for x in SWIPES}}
+   if k=='swipes':values[k]=normalize_preferences(values[k],{key:choices for key,_,choices in SWIPES})
    values[k]=json.dumps(values[k])
  if values:
   values['updated_at']=now(); cols=', '.join(k+'=?' for k in values)
