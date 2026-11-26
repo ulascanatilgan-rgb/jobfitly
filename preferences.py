@@ -97,3 +97,35 @@ def preference_alignment(job,raw):
   weight_total+=weight
  if not weight_total:return None
  return round(10*total/weight_total,2)
+
+def _mode_evidence(job):
+ """Classify explicit work-setting evidence without guessing from generic words."""
+ title=str(job.get("title") or "").lower()
+ description=str(job.get("description") or "")[:6000].lower()
+ place=(" ".join(str(job.get(k) or "") for k in ("city","country","location_label"))).lower()
+ text=" ".join((title,description,place))
+ hybrid=any(_match(text,p) for p in CHOICES["mode"]["Hybrid"])
+ remote=any(_match(text,p) for p in CHOICES["mode"]["Remote"])
+ onsite=any(_match(text,p) for p in CHOICES["mode"]["On-site"])
+ # Hybrid descriptions often mention remote days; hybrid is the more specific signal.
+ if hybrid:return "Hybrid"
+ if remote:return "Remote"
+ if onsite:return "On-site"
+ return "Unknown"
+
+def preference_constraints_match(job,raw):
+ """Apply only genuinely hard preference constraints.
+
+ Work setting is an explicit eligibility filter. Other preference groups remain
+ ranking signals because sector/company-type/seniority text is often incomplete.
+ """
+ preferences=normalize_preferences(raw)
+ modes=preferences.get("mode",[])
+ if not modes:return True
+ evidence=_mode_evidence(job)
+ allowed=set(modes)
+ if evidence!="Unknown":return evidence in allowed
+ # An unknown setting can safely behave as ordinary location-based/on-site only
+ # when On-site was selected. It must never satisfy Remote-only or Hybrid-only.
+ return "On-site" in allowed
+
