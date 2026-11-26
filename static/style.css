@@ -867,3 +867,21 @@ body{font-size:13px}
  .next-move-card{padding:16px}.next-move-card h3{min-height:0}
  .next-move-copy{font-size:11px!important}.next-moves-head{align-items:flex-start}}
 @media(prefers-reduced-motion:reduce){.next-move-fill{animation:none}}
+
+/* Waydefine animated identity — shared across landing, auth and app. */
+.wd-mark{display:inline-flex;position:relative;align-items:baseline;white-space:nowrap;font-family:Manrope,system-ui,sans-serif;font-size:clamp(22px,2.4vw,34px);font-weight:800;letter-spacing:-.075em;line-height:1.2;vertical-align:middle}
+.wd-initial{position:relative;display:inline-flex;color:#850d45}
+.wd-w{display:inline-block;letter-spacing:-.09em}
+.wd-monkey{position:absolute;z-index:1;color:inherit;width:42px;height:53px;left:14px;bottom:calc(100% - 4px);overflow:visible}
+.wd-rest{color:#131313}
+.wd-dot{color:#850d45}
+.wd-initial,.wd-dot{animation:wd-front 7s ease-in-out infinite}
+.wd-rest{animation:wd-back 7s ease-in-out infinite}
+@keyframes wd-front{0%,39%,100%{color:#850d45}50%,88%{color:#131313}}
+@keyframes wd-back{0%,39%,100%{color:#131313}50%,88%{color:#850d45}}
+.site-header:has(.wd-mark),.flow-app-header:has(.wd-mark){overflow:visible}
+.landing-head-clean,.flow-app-header,.site-header{position:relative}
+.site-header .wd-mark,.flow-brand .wd-mark{margin-top:20px}
+.flow-brand{overflow:visible}
+@media(max-width:650px){.wd-mark{font-size:25px}.wd-monkey{width:34px;height:44px;left:10px}.site-header .wd-mark,.flow-brand .wd-mark{margin-top:15px}}
+@media(prefers-reduced-motion:reduce){.wd-initial,.wd-rest,.wd-dot{animation:none!important}}
