@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import wraps
 from contextlib import contextmanager
 import requests
-from job_search import search_jobs, selected_languages, required_languages
+from job_search import search_jobs, selected_languages, required_languages, language_eligible
 from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
@@ -274,6 +274,7 @@ def get_jobs(uid,watch_only=False):
   sql='''SELECT j.*, CASE WHEN w.job_id IS NULL THEN 0 ELSE 1 END AS saved FROM jobs j LEFT JOIN watchlist w ON w.job_id=j.id AND w.user_id=j.user_id WHERE j.user_id=?'''
   if watch_only:sql+=' AND w.job_id IS NOT NULL'
   rows=[dict(r) for r in c.execute(sql,(uid,)).fetchall()]
+ rows=[row for row in rows if language_eligible(row,p.get('language'))]
  for row in rows:row['score'],row['matched_terms']=score_job(row,p)
  rows.sort(key=lambda x:(x['score'],x['published'] or ''),reverse=True)
  return rows
@@ -314,8 +315,7 @@ def preview_candidates(uid,max_results=5):
   if not preference_constraints_match(job,p.get('swipes')):continue
   if not specialty_fit(job.get('title'),cv):continue
   if feedback_penalty(job,feedback)>=100:continue
-  mandatory=required_languages(str(job.get('title') or '')+' '+str(job.get('description') or ''))
-  if selected and mandatory and not mandatory.issubset(selected):continue
+  if not language_eligible(job,selected):continue
   fit,terms=lexical_fit(job,cv)
   dna_fit=role_similarity(job,dna)
   path_fit=path_title_match(job,p.get('path_keywords'))
@@ -417,6 +417,7 @@ def fetch_candidates(profile):
    link=job.get('url') or ''
    if not _valid_public_link(link):continue
    if not preference_constraints_match(job,original.get('swipes')):continue
+   if not language_eligible(job,original.get('language')):continue
    # Employer ATS feeds list currently published vacancies. Their first
    # publication dates can be older than 30 days without implying closure.
    if job.get('source') not in {'Greenhouse','Lever','Ashby'} and job.get('published') and not _recent(job['published']):continue
@@ -471,7 +472,7 @@ def get_run(uid,date=None):
    WHERE r.run_id=? AND NOT EXISTS
     (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
    ORDER BY r.position ASC LIMIT 5""",(run['id'],)).fetchall()
-  jobs=sorted((dict(j) for j in rows),key=lambda item:item['score'],reverse=True)
+  jobs=sorted((dict(j) for j in rows if language_eligible(dict(j),profile_for(uid).get('language'))),key=lambda item:item['score'],reverse=True)
  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
  # Only positions actually returned to the UI are recorded, not the reserves.
  remember_displayed(uid,jobs)
@@ -516,8 +517,7 @@ def run_search(uid):
    if is_seen(j,seen):continue
    if not preference_constraints_match(j,p.get('swipes')):continue
    if feedback_penalty(j,feedback)>=100:continue
-   mandatory_languages=required_languages(str(j.get('title') or '')+' '+str(j.get('description') or ''))
-   if allowed_languages and mandatory_languages and not mandatory_languages.issubset(allowed_languages):continue
+   if not language_eligible(j,allowed_languages):continue
    if not specialty_fit(j.get('title'),p['cv_for_matching']):continue
    cv_fit,evidence=lexical_fit(j,p['cv_for_matching'])
    path_fit=path_title_match(j,p.get('path_keywords'))
