@@ -82,7 +82,7 @@ def required_languages(value):
     Do not treat incidental mentions (Dutch market, French clients), optional
     skills ('Dutch is a plus'), or negated requirements as mandatory.
     """
-    text = re.sub(r"\\s+", " ", str(value or "").casefold())
+    text = re.sub(r"[ \t\r\f\v]+", " ", str(value or "").casefold())
     names = {
         "english": r"english|engels|anglais|anglophone",
         "dutch": r"dutch|nederlands|nederlandse|nederlandstalig(?:e)?|vlaams|flemish|néerlandais|neerlandais|flamand",
@@ -95,27 +95,27 @@ def required_languages(value):
     }
     required = set()
     # Role titles or descriptive labels explicitly recruiting a language speaker.
-    role = re.split(r"[\\n.;]", text, maxsplit=1)[0][:220]
-    optional = re.compile(r"\\b(?:plus|bonus|advantage|asset|preferred|nice to have|optional|not required|not mandatory|geen vereiste|is een plus|est un atout|souhait[ée])\\b")
-    negated = re.compile(r"\\b(?:not required|not mandatory|no need|geen vereiste|niet vereist|pas obligatoire|non requis)\\b")
+    role = re.split(r"[\n.;]", text, maxsplit=1)[0][:220]
+    optional = re.compile(r"\b(?:plus|bonus|advantage|asset|preferred|nice to have|optional|not required|not mandatory|geen vereiste|is een plus|est un atout|souhait[ée])\b")
+    negated = re.compile(r"\b(?:not required|not mandatory|no need|geen vereiste|niet vereist|pas obligatoire|non requis)\b")
     obligatory = re.compile(
-        r"\\b(?:required|requirement|mandatory|essential|must|need to|needs to|fluent|fluency|"
+        r"\b(?:required|requirement|mandatory|essential|must|need to|needs to|fluent|fluency|"
         r"proficien(?:t|cy)|excellent|strong command|working knowledge|good command|"
         r"native|mother tongue|speaker|speaking|spoken|written|bilingual|trilingual|"
         r"verplicht|vereist|vloeiend|moedertaal|goede kennis|uitstekende kennis|"
         r"maîtrise|courant|obligatoire|indispensable|bilingue|trilingue|"
-        r"niveau|minimum level|level [abc][12])\\b"
+        r"niveau|minimum level|level [abc][12])\b"
     )
     for language, pattern in names.items():
-        language_pattern = r"\\b(?:" + pattern + r")\\b"
+        language_pattern = r"\b(?:" + pattern + r")\b"
         for match in re.finditer(language_pattern, text):
             start, end = match.span()
             # Keep clauses local: an optional Dutch statement must not be
             # overridden by an English requirement in the adjacent sentence.
             clause_start = max(text.rfind(".", 0, start), text.rfind(";", 0, start),
-                               text.rfind("\\n", 0, start)) + 1
+                               text.rfind("\n", 0, start)) + 1
             clause_end_candidates = [x for x in (text.find(".", end), text.find(";", end),
-                                                  text.find("\\n", end)) if x >= 0]
+                                                  text.find("\n", end)) if x >= 0]
             clause_end = min(clause_end_candidates) if clause_end_candidates else len(text)
             clause = text[clause_start:clause_end]
             near = text[max(clause_start, start - 75):min(clause_end, end + 75)]
@@ -126,8 +126,8 @@ def required_languages(value):
             suffix = text[end:min(len(text), end+24)]
             prefix = text[max(0,start-24):start]
             in_role = start < len(role)
-            if in_role and (re.search(r"^[-\\s]*(?:speaking|speaker|spoken|fluent|native|language|talig)\\b", suffix)
-                            or re.search(r"\\b(?:speaker|speaking|fluent|native|bilingual)\\s*[-:/]?\\s*$", prefix)
+            if in_role and (re.search(r"^[-\s]*(?:speaking|speaker|spoken|fluent|native|language|talig)\b", suffix)
+                            or re.search(r"\b(?:speaker|speaking|fluent|native|bilingual)\s*[-:/]?\s*$", prefix)
                             or re.search(r"(?:" + pattern + r")", match.group(0)) and
                                re.search(r"talig|ophone", match.group(0))):
                 required.add(language)
@@ -136,7 +136,7 @@ def required_languages(value):
                 required.add(language)
     # In Belgian job titles 'NL/FR' or 'FR-NL' is a two-language requirement,
     # even where neither word is spelled out.
-    if re.search(r"\\b(?:nl\\s*[/+&-]\\s*fr|fr\\s*[/+&-]\\s*nl)\\b", role):
+    if re.search(r"\b(?:nl\s*[/+&-]\s*fr|fr\s*[/+&-]\s*nl)\b", role):
         required.update(("dutch", "french"))
     return required
 
@@ -147,7 +147,7 @@ def language_eligible(job, selected):
         return True
     title = str(job.get("title") or "")
     description = str(job.get("description") or "")
-    mandatory = required_languages(title + "\\n" + description)
+    mandatory = required_languages(title + "\n" + description)
     return mandatory.issubset(allowed)
 
 def search_jobs(profile, max_age_days=14):
@@ -255,8 +255,7 @@ def search_jobs(profile, max_age_days=14):
         if published and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
             continue
         languages = selected_languages(profile.get("language"))
-        mandatory = required_languages(title + " " + description)
-        if languages and mandatory and not mandatory.issubset(languages):
+        if not language_eligible({"title": title, "description": description}, languages):
             continue
         seen.add(identity)
         output.append({
