@@ -7,13 +7,23 @@ CHOICES={
   "Operations & strategy":("operations","operational","strategy","strategic","project","program","programme","pmo","business manager","chief of staff","business operations"),
   "People & relationships":("client","customer","stakeholder","partnership","account manager","customer success","sales","relationship","membership","business development"),
   "Analytical":("analysis","analyst","data","audit","financial","risk","controls","research","intelligence"),
-  "Creative & product":("product","design","creative","brand","marketing","innovation")
+  "Creative & product":("product","design","creative","brand","marketing","innovation"),
+  "Clinical & care":("physician","doctor","clinical","nursing","hospital","care","therapist","dentist"),
+  "Legal & policy":("lawyer","attorney","legal","law firm","solicitor","counsel","litigation","policy"),
+  "Technical & field":("electrician","engineer","technician","site","maintenance","hvac","plumber","mechanic","field operations"),
+  "Safety & regulation":("hse","ehs","occupational safety","health and safety","safety officer","safety manager","regulatory","prevention"),
+  "Teaching & research":("education","teacher","professor","lecturer","research","laboratory","curriculum")
  },
  "sector":{
   "Technology":("software","technology","tech","ai","engineering","cloud","saas","cyber"),
   "Finance":("bank","finance","financial","investment","fintech","insurance","payments","capital markets"),
   "Healthcare":("medical","health","pharma","clinical","patient","hospital"),
-  "Creative":("design","art","marketing","creative","studio","museum")
+  "Creative":("design","art","marketing","creative","studio","museum"),
+  "Legal & public service":("law firm","lawyer","legal","public policy","government","notary","justice","ngo","nonprofit"),
+  "Safety & industry":("occupational safety","industrial","manufacturing","hse","ehs","workplace safety","construction"),
+  "Engineering & trades":("engineering","electrician","technician","mechanic","hvac","construction","maintenance"),
+  "Education & research":("school","university","education","research","academic","scientific","laboratory"),
+  "Hospitality & services":("hotel","restaurant","hospitality","culinary","barista","bakery","catering","customer service")
  },
  "environment":{
   "Startup":("startup","start-up","early-stage","scale-up","scaleup","seed stage"),
