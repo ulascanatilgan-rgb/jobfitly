@@ -166,6 +166,7 @@ def search_jobs(profile, max_age_days=14):
         "preferences": profile.get("swipes") or {},
         "self_ratings": profile.get("questions") or {},
         "cv_excerpt_with_contact_removed": _safe_cv_excerpt(profile),
+        "candidate_cv_grounded_occupations": (profile.get("occupation_profile") or {}).get("roles",[])[:12],
         "search_focus_from_verifiable_cv": str(profile.get("search_focus") or "")[:420],
         "discovery_scope": str(profile.get("search_scope") or "")[:240],
     }
@@ -173,13 +174,13 @@ def search_jobs(profile, max_age_days=14):
         f"Today is {date.isoformat()} UTC. Search the live web for up to 20 specific, "
         "genuine job openings whose real duties and professional qualifications follow " 
         "DIRECTLY from the applicant CV. CV is the main evidence, while wishes and " 
-        "work style are secondary. Never recommend an HR Director role to a security, " 
-        "audit, banking, or operations professional without HR leadership experience. " 
+        "work style are secondary. Do not assume ANY particular profession or industry. "
+        "Recognize the uploaded candidate's own actual occupation and licenses. " 
         "Avoid roles with unrelated professional licenses or unrelated core specialisms. " 
         "If selected_adjacent_career_paths contains titles, actively explore relevant open jobs "
         "in those directions, verifying transferable CV evidence for each role. "
         "Treat these as directions for diversifying a VERIFIED CV-matched shortlist, not proof of experience. "
-        "Never suggest unrelated driver, warehouse, kitchen, engineering or clinical roles simply to fill five slots. "
+        "Never suggest any occupation that the candidate lacks required professional training or CV evidence for, regardless of its industry. "
         "For each focus group, search multiple employer career sites and direct vacancy URLs. "
         "Treat these as priorities, NOT mandatory filters: include other CV-relevant "
         "roles when those paths have few or no real vacancies. "
