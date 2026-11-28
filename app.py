@@ -108,7 +108,7 @@ def init_db():
  with conn() as c:
   c.executescript('''
    CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL);
-   CREATE TABLE IF NOT EXISTS profiles(user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, name TEXT DEFAULT '', country TEXT DEFAULT 'Belgium', city TEXT DEFAULT 'Brussels', language TEXT DEFAULT 'English', keywords TEXT DEFAULT '', cv_name TEXT DEFAULT '', cv_text TEXT DEFAULT '', questions TEXT DEFAULT '{}', swipes TEXT DEFAULT '{}', updated_at TEXT DEFAULT '');
+   CREATE TABLE IF NOT EXISTS profiles(user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, name TEXT DEFAULT '', country TEXT DEFAULT 'Belgium', city TEXT DEFAULT '', language TEXT DEFAULT 'English', keywords TEXT DEFAULT '', cv_name TEXT DEFAULT '', cv_text TEXT DEFAULT '', questions TEXT DEFAULT '{}', swipes TEXT DEFAULT '{}', updated_at TEXT DEFAULT '');
    CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, external_id TEXT, title TEXT, company TEXT, city TEXT, country TEXT, description TEXT, url TEXT, source TEXT, published TEXT, created_at TEXT, UNIQUE(user_id,external_id));
    CREATE TABLE IF NOT EXISTS watchlist(user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE, added_at TEXT, PRIMARY KEY(user_id,job_id));
    CREATE TABLE IF NOT EXISTS kits(user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE, motivation TEXT, cv TEXT, updated_at TEXT, PRIMARY KEY(user_id,job_id));
