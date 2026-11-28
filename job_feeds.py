@@ -199,13 +199,13 @@ def _lexgo(profile,code):
         return []
     cv=(str(profile.get("cv_for_matching") or "")+" "+
         str(profile.get("keywords") or "")).casefold()
-    if not re.search(r"\b(risk|audit|compliance|legal|regulatory|governance|fraud)\b",cv):
+    if not re.search(r"\b(risk|audit|compliance|legal|lawyer|solicitor|attorney|paralegal|litigation|regulatory|governance|fraud)\b",cv):
         return []
     from job_search import selected_languages
     langs=selected_languages(profile.get("language"))
     only_english=bool(langs) and langs=={"english"}
-    terms=["compliance","risk","audit"]
-    queries=[x for x in terms if x in cv] or terms[:2]
+    terms=["legal","lawyer","litigation","compliance","risk","audit"]
+    queries=[x for x in terms if x in cv] or ["legal","compliance"]
     result=[];seen=set()
     for q in queries[:2]:
         params={"domain":code.lower(),"q":q,"limit":15}
@@ -243,13 +243,11 @@ def discover_feed_jobs(profile):
     """
     code=_country_code(profile.get("country"))
     cv=str(profile.get("cv_for_matching") or profile.get("cv_text_preview") or "")
-    queries=_role_queries(cv,profile.get("keywords"))
-    from next_moves import valid_path_titles
-    selected=valid_path_titles(profile.get("path_keywords"))
-    # Preserve a CV-grounded broad query even when exploratory paths are chosen.
-    focus=[*selected[:3],*(queries[:1] if queries else [])]
-    if not focus:focus=queries[:2]
-    focus=list(dict.fromkeys(focus))[:4]
+    # Profession-agnostic, user-specific role titles; not a bank/IT-only list.
+    from career_search import career_targets
+    queries=career_targets(profile)
+    # Distribute queries across actual occupation and a supported adjacent path.
+    focus=list(dict.fromkeys([*queries[:5],*(_role_queries(cv,profile.get("keywords"))[:1])]))[:5]
     tasks=[("jobicy",lambda:_jobicy(profile,code))]
     if code in ("BE","LU"):tasks.append(("lexgo",lambda:_lexgo(profile,code)))
     for i,phrase in enumerate(focus):
