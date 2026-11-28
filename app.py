@@ -470,11 +470,11 @@ def fetch_candidates(profile):
 
  # Search direct APIs plus indexed employer vacancies and the major boards
  # concurrently; a slow ATS refresh no longer blocks web discovery.
- with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+ with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
   feeds_future=pool.submit(discover_feed_jobs,original)
   ats_future=pool.submit(refresh_shared,DB,original)
   search_futures=[(wave,pool.submit(web_wave,wave))
-                  for wave in waves[:2]] if os.getenv('OPENAI_API_KEY') else []
+                  for wave in waves[:3]] if os.getenv('OPENAI_API_KEY') else []
   for label,future in [('feeds',feeds_future),('ats',ats_future)]:
    try:
     if label=='feeds':
@@ -491,11 +491,11 @@ def fetch_candidates(profile):
 
  # Use the number of plausible 7/10 CV matches, not a raw count of unrelated
  # 'remote jobs', to decide whether broader searches are still necessary.
- if os.getenv('OPENAI_API_KEY') and len(waves)>2:
+ if os.getenv('OPENAI_API_KEY') and len(waves)>3:
   strong=qualified_pool_size(unique.values(),original)
   if strong<25:
    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-    remaining=[(wave,pool.submit(web_wave,wave)) for wave in waves[2:]]
+    remaining=[(wave,pool.submit(web_wave,wave)) for wave in waves[3:]]
     for wave,future in remaining:
      try:merge(future.result())
      except (requests.RequestException,ValueError,TypeError,KeyError) as exc:
