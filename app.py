@@ -416,7 +416,7 @@ def fetch_candidates(profile):
  """Search comprehensive but bounded source waves, then rank actual CV fit.
 
  The first employer/portal waves are mandatory when web access is configured.
- Later waves run only while fewer than twelve strong potential matches have
+ Later waves run while fewer than twenty-five plausible matches have
  survived CV, title, language, location and mode checks.
  """
  original=dict(profile)
@@ -493,7 +493,7 @@ def fetch_candidates(profile):
  # 'remote jobs', to decide whether broader searches are still necessary.
  if os.getenv('OPENAI_API_KEY') and len(waves)>2:
   strong=qualified_pool_size(unique.values(),original)
-  if strong<12:
+  if strong<25:
    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
     remaining=[(wave,pool.submit(web_wave,wave)) for wave in waves[2:]]
     for wave,future in remaining:
