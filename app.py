@@ -5,12 +5,13 @@ from pathlib import Path
 from functools import wraps
 from contextlib import contextmanager
 import requests
-from job_search import search_jobs, selected_languages, required_languages, language_eligible
+from job_search import search_jobs, selected_languages, required_languages, language_eligible, _canonical
 from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
 from career_search import career_targets, role_relevance, role_eligible, location_eligible
 from occupation_profile import occupation_profile
+from search_quality import search_waves, qualified_pool_size
 from next_moves import alternative_next_moves, valid_path_titles, path_title_match
 from shared_inventory import prepare_inventory, shared_jobs, refresh_shared
 from preferences import normalize_preferences, preference_alignment, preference_constraints_match
@@ -401,10 +402,11 @@ def _related_role_focus(cv_text):
  return [focus for keywords,focus in categories if any(re.search(r'\b'+re.escape(w)+r'\b',cv) for w in keywords)][:4]
 
 def fetch_candidates(profile):
- """Find professionally relevant live jobs through employer APIs, feeds and the web.
+ """Search comprehensive but bounded source waves, then rank actual CV fit.
 
- Hard gates are applied BEFORE ranking and before deciding search depth. Raw
- inventory volume must not suppress deeper focused discovery.
+ The first employer/portal waves are mandatory when web access is configured.
+ Later waves run only while fewer than twelve strong potential matches have
+ survived CV, title, language, location and mode checks.
  """
  original=dict(profile)
  cv=original.get('cv_for_matching') or original.get('cv_text_preview') or ''
@@ -415,9 +417,9 @@ def fetch_candidates(profile):
                      r'United States|Luxembourg|Switzerland|Ireland|Turkey|'
                      r'Türkiye|Spain|Italy|Portugal|Poland|Canada)\b',place,re.I)
   if detected:original['country']=detected.group()
- focus=career_targets(original)
  original['path_keywords']=valid_path_titles(original.get('path_keywords'))
- original['search_scope']='Explicit selected location and eligible remote; mandatory selected languages; proven CV skills'
+ original['search_scope']='Only selected country/cities or explicitly eligible remote; hard language requirements and proven CV specialties'
+ waves=search_waves(original)
  unique={};errors=[]
  dna=original.get('career_dna') or career_dna(cv)
  def merge(rows):
@@ -430,46 +432,66 @@ def fetch_candidates(profile):
    if not specialty_fit(job.get('title'),cv):continue
    if not role_eligible(job,original,dna):continue
    if job.get('source') not in {'Greenhouse','Lever','Ashby'} and job.get('published') and not _recent(job['published']):continue
-   key=link.split('?')[0].rstrip('/').lower()
-   unique.setdefault(key,job)
+   # Indeed postings use the jk query param. Dropping query strings caused
+   # ALL Indeed /viewjob URLs to collapse into a single slot.
+   identity=_canonical(link)
+   if identity:
+    key='|'.join(identity)
+   else:
+    key=link.split('#')[0].rstrip('/').lower()
+   existing=unique.get(key)
+   if existing:
+    # Prefer the more informative employer description when sources overlap.
+    if len(str(job.get('description') or ''))>len(str(existing.get('description') or '')):
+     unique[key]=job
+   else:
+    unique[key]=job
+
  merge(shared_jobs(DB,original.get('country'),1800))
- try:passes=max(0,min(3,int(os.getenv('WAYDEFINE_WEB_SEARCH_PASSES','2'))))
- except ValueError:passes=2
- # Fetch job APIs and the first focused web search IN PARALLEL. A slow ATS
- # board must not unnecessarily delay the web results.
- with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+ try:passes=max(0,min(4,int(os.getenv('WAYDEFINE_WEB_SEARCH_PASSES','4'))))
+ except ValueError:passes=4
+ waves=waves[:passes]
+ def web_wave(wave):
+  scoped=dict(original)
+  scoped['search_focus']=wave['search_focus']
+  scoped['source_focus']=wave['source_focus']
+  return search_jobs(scoped,30)
+
+ # Search direct APIs plus indexed employer vacancies and the major boards
+ # concurrently; a slow ATS refresh no longer blocks web discovery.
+ with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
   feeds_future=pool.submit(discover_feed_jobs,original)
   ats_future=pool.submit(refresh_shared,DB,original)
-  first_future=None
-  if os.getenv('OPENAI_API_KEY') and passes:
-   first_query=dict(original)
-   first_query['search_focus']='; '.join(focus[:4])
-   first_future=pool.submit(search_jobs,first_query,30)
-  try:
-   jobs,feed_errors=feeds_future.result()
-   errors.extend(feed_errors);merge(jobs)
-  except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
-   errors.append('feeds:'+type(exc).__name__)
-  try:merge(ats_future.result())
-  except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
-   errors.append('ats:'+type(exc).__name__)
+  search_futures=[(wave,pool.submit(web_wave,wave))
+                  for wave in waves[:2]] if os.getenv('OPENAI_API_KEY') else []
+  for label,future in [('feeds',feeds_future),('ats',ats_future)]:
+   try:
+    if label=='feeds':
+     rows,feed_errors=future.result()
+     errors.extend(feed_errors);merge(rows)
+    else:merge(future.result())
+   except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
+    errors.append(label+':'+type(exc).__name__)
   direct_count=len(unique)
-  if first_future is not None:
-   try:merge(first_future.result())
+  for wave,future in search_futures:
+   try:merge(future.result())
    except (requests.RequestException,ValueError,TypeError,KeyError) as exc:
-    errors.append('web1:'+type(exc).__name__)
- # A second family-focused pass is valuable only when too few qualified
- # openings survived (default maximum 2 calls per manual search).
- if os.getenv('OPENAI_API_KEY'):
-  for index in range(1,passes):
-   if len(unique)>=18:break
-   query=dict(original)
-   query['search_focus']='; '.join(focus[index*4:(index+1)*4] or focus[:4])
-   try:merge(search_jobs(query,30))
-   except (requests.RequestException,ValueError,TypeError,KeyError) as exc:
-    errors.append('web'+str(index+1)+':'+type(exc).__name__)
- app.logger.info('Discovery: direct_eligible=%s total_eligible=%s web_passes_allowed=%s errors=%s',
-                 direct_count,len(unique),os.getenv('WAYDEFINE_WEB_SEARCH_PASSES','2'),len(errors))
+    errors.append(wave['wave']+':'+type(exc).__name__)
+
+ # Use the number of plausible 7/10 CV matches, not a raw count of unrelated
+ # 'remote jobs', to decide whether broader searches are still necessary.
+ if os.getenv('OPENAI_API_KEY') and len(waves)>2:
+  strong=qualified_pool_size(unique.values(),original)
+  if strong<12:
+   with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+    remaining=[(wave,pool.submit(web_wave,wave)) for wave in waves[2:]]
+    for wave,future in remaining:
+     try:merge(future.result())
+     except (requests.RequestException,ValueError,TypeError,KeyError) as exc:
+      errors.append(wave['wave']+':'+type(exc).__name__)
+ final_quality=qualified_pool_size(unique.values(),original)
+ app.logger.info('Search coverage: employer_and_feed=%s eligible=%s prelim_high_fit=%s waves=%s source_errors=%s',
+                 direct_count,len(unique),final_quality,len(waves),len(errors))
  return list(unique.values()),errors
 
 def get_run(uid,date=None):
