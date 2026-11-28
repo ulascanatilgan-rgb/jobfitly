@@ -5,6 +5,7 @@ keywords express intent but cannot invent professional credentials.
 """
 import re
 from career_dna import career_dna
+from matching import specialty_fit
 from shared_inventory import _country_matches
 
 ROLE_TYPES = {
@@ -112,6 +113,8 @@ def career_targets(profile):
 def role_relevance(job,profile,dna=None):
     """0..100 title/domain relevance. Unrelated titles get 0 irrespective of description."""
     title=job.get("title") or ""
+    cv_evidence=profile.get("cv_for_matching") or profile.get("cv_text_preview") or ""
+    if not specialty_fit(title,cv_evidence):return 0
     groups=role_groups(title)
     if not groups:return 0
     cv=str(profile.get("cv_for_matching") or "")
