@@ -15,6 +15,18 @@ FAMILIES={
  "Engineering & trades":("engineer","electrical","electrician","technician","mechanic","construction","elektricien","technieker"),
  "Healthcare":("nurse","medical","clinical","healthcare","pharmacy","hospital","verpleegkundige"),
  "Education":("teacher","teaching","education","lecturer","training","curriculum"),
+ "Legal & justice":("attorney","lawyer","solicitor","barrister","legal counsel","litigation","contract law","juris doctor","paralegal","legal practice","advocacy"),
+ "Occupational safety":("occupational health and safety","safety officer","hse","ehs","safety inspector","nebosh","iosh","risk assessment","industrial hygiene","workplace safety","safety management"),
+ "Medical & clinical practice":("physician","doctor of medicine","medical doctor","general practitioner","surgeon","dentist","clinical care","patient care","hospital physician","medical residency"),
+ "Nursing & allied care":("registered nurse","nursing","physiotherapist","occupational therapist","radiographer","midwife","paramedic"),
+ "Skilled trades":("plumber","carpenter","welder","electrician","machinist","fabricator","hvac technician","automotive technician"),
+ "Transport & logistics":("truck driver","delivery driver","courier","fleet driver","pilot","forklift operator","transport manager","supply chain"),
+ "Hospitality & culinary":("chef","cook","baker","barista","restaurant manager","hospitality","hotel manager","culinary"),
+ "Scientific research":("scientist","researcher","laboratory","biomedical","research assistant","research fellow","phd","postdoctoral"),
+ "Public service & nonprofit":("civil servant","policy officer","public affairs","ngo","nonprofit","social worker","case manager","public administration"),
+ "Arts & media":("artist","illustrator","photographer","film production","musician","journalist","editor","art director"),
+ "Agriculture & environment":("agronomist","agriculture","farm management","sustainability","environmental science","ecologist","forestry"),
+
 }
 SKILLS={
  "Stakeholder management":("stakeholder","client relations","relationship management","partner management"),
@@ -29,6 +41,12 @@ SKILLS={
  "Technology":("software","cloud","security","api","python","sql","iam","devops"),
  "Communication":("communications","presentations","public speaking","stakeholder engagement"),
  "Operations coordination":("operations","coordination","logistics","scheduling","service delivery"),
+ "Legal casework":("case law","legal drafting","litigation","legal counsel","client advocacy"),
+ "Clinical care":("patient care","diagnosis","clinical assessment","medical practice"),
+ "Workplace safety":("risk assessments","occupational safety","hse","safety inspections"),
+ "Research methodology":("laboratory","research methodology","scientific analysis","clinical trials"),
+ "Trade skills":("apprenticeship","maintenance","installation","welding","electrician"),
+
 }
 ALIASES={
  "Operations & management":("operations","operational","logistics","service delivery","office manager","process"),
@@ -43,6 +61,18 @@ ALIASES={
  "Engineering & trades":("electrician","technician","engineer","mechanic","construction"),
  "Healthcare":("clinical","healthcare","nurse","medical","pharmacist"),
  "Education":("teacher","lecturer","educator","education","trainer"),
+ "Legal & justice":("legal","lawyer","solicitor","attorney","counsel","litigation","paralegal","law firm"),
+ "Occupational safety":("occupational safety","health and safety","hse","ehs","safety officer","safety inspector","industrial hygiene"),
+ "Medical & clinical practice":("doctor","physician","surgeon","gp","general practitioner","medical","dentist"),
+ "Nursing & allied care":("nurse","midwife","physiotherapy","therapist","paramedic"),
+ "Skilled trades":("electrician","plumber","carpenter","welder","mechanic","hvac","technician"),
+ "Transport & logistics":("driver","courier","fleet","transport","logistics","pilot"),
+ "Hospitality & culinary":("chef","cook","baker","barista","hospitality","hotel","restaurant"),
+ "Scientific research":("scientist","researcher","laboratory","research fellow","postdoctoral"),
+ "Public service & nonprofit":("public policy","civil servant","nonprofit","ngo","social worker","public affairs"),
+ "Arts & media":("artist","journalist","photographer","illustrator","creative director","film","music"),
+ "Agriculture & environment":("agriculture","agronomy","environmental","ecologist","sustainability"),
+
 }
 
 def _normalize(s):
