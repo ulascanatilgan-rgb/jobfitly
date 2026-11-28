@@ -61,7 +61,7 @@ CITIES = {
 CITY_ALIAS = {a:key for key,aliases in CITIES.items() for a in aliases}
 
 def _hits(text,pattern):
-    return bool(re.search(r"(?<!\\w)(?:" + pattern + r")(?!\\w)",str(text or "").casefold()))
+    return bool(re.search(r"(?<!\w)(?:" + pattern + r")(?!\w)",str(text or "").casefold()))
 
 def role_groups(title):
     """Classify the main actual advertised job title, not vague body text."""
@@ -101,7 +101,7 @@ def career_targets(profile):
     }
     ordered=[]
     # A user's own relevant keywords come first, not their CV's broad vocabulary.
-    for phrase in re.split(r"[,;\\n]+",str(profile.get("keywords") or "")):
+    for phrase in re.split(r"[,;\n]+",str(profile.get("keywords") or "")):
         phrase=phrase.strip()
         if 3<=len(phrase)<=65 and len(phrase.split())<=6 and role_groups(phrase)&(supported|preferred):
             ordered.append(phrase)
