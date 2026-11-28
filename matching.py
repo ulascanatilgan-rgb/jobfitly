@@ -50,6 +50,12 @@ _SPECIALTY = (
     # evidence in the CV itself. The candidate's job *preferences* are never proof.
     (r"\b(?:hr manager|hr director|head of people|chief people officer|people director|talent acquisition|recruitment manager|recruiting manager|human resources business partner)\b",
      r"\b(?:human resources|hr manager|hr director|head of hr|people operations|talent acquisition|recruitment manager|recruiting manager|hr business partner)\b"),
+    (r"\b(?:surgeon|surgical consultant|surgery specialist)\b",
+     r"\b(?:surgeon|surgery specialist|surgical residency|surgical consultant|specialty in surgery|surgical training)\b"),
+    (r"\b(?:psychiatrist|radiologist|anesthetist|anaesthetist|pediatrician|paediatrician)\b",
+     r"\b(?:psychiatrist|psychiatry residency|radiologist|radiology residency|anesthetist|anaesthetist|anesthesia residency|anaesthesia residency|pediatrician|paediatrician|pediatrics residency|paediatrics residency)\b"),
+    (r"\b(?:attorney|solicitor|barrister|advocate|avocat|advocaat)\b",
+     r"\b(?:attorney|solicitor|barrister|licensed lawyer|qualified lawyer|bar admission|admitted to the bar|advocaat|avocat|licensed to practice law)\b"),
     (r"\b(?:physician|medical doctor|general practitioner|family doctor|surgeon|psychiatrist|medical director|radiologist|anesthetist|anaesthetist|pediatrician|paediatrician)\b",
      r"\b(?:physician|doctor of medicine|medical doctor|mbbs|medical license|medical licence|medical degree|general practitioner|family doctor|surgeon|psychiatrist|medical residency|residency in medicine)\b"),
     (r"\b(?:dentist|dental surgeon|orthodontist)\b",
