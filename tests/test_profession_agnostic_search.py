@@ -57,3 +57,13 @@ def test_wished_but_unsupported_specialty_is_rejected():
           "keywords":"Surgeon, barrister, truck driver"}
  for title in ("Surgeon","Barrister","Truck Driver"):
   assert not role_eligible({"title":title},profile)
+
+@pytest.mark.parametrize("cv,forbidden",[
+ ("Medical Doctor\nPhysician managing general practice and diagnosis.","Registered Nurse"),
+ ("Medical Doctor\nPhysician managing general practice and diagnosis.","Licensed Pharmacist"),
+ ("Solicitor\nLegal counsel handling corporate contracts.","General Practitioner"),
+ ("HSE Specialist\nOccupational health and safety inspections.","Legal Counsel"),
+])
+def test_professional_licenses_are_not_transferable(cv,forbidden):
+ profile={"cv_for_matching":cv}
+ assert not role_eligible({"title":forbidden},profile)
