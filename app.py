@@ -200,7 +200,7 @@ def profile_for(uid):
  with conn() as c:
   row=c.execute('SELECT * FROM profiles WHERE user_id=?',(uid,)).fetchone()
   if not row:
-   c.execute('INSERT INTO profiles(user_id,updated_at) VALUES (?,?)',(uid,now()))
+   c.execute('INSERT INTO profiles(user_id,city,updated_at) VALUES (?,?,?)',(uid,'',now()))
  verified_cv_details(uid)
  with conn() as c:row=c.execute('SELECT * FROM profiles WHERE user_id=?',(uid,)).fetchone()
  d=dict(row)
