@@ -88,7 +88,7 @@ def career_targets(profile):
     # Stable intent order: user's keyword order first, then actual CV career
     # families in evidence rank order, never unordered Python set iteration.
     user_groups=[]
-    for phrase in re.split(r"[,;\\n]+",str(profile.get("keywords") or "")):
+    for phrase in re.split(r"[,;\n]+",str(profile.get("keywords") or "")):
         for group in sorted(role_groups(phrase)):
             if group not in user_groups:user_groups.append(group)
     for path in profile.get("path_keywords") or []:
