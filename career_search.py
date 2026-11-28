@@ -85,7 +85,24 @@ def career_targets(profile):
            (profile.get("swipes") or {}).get("role_type",[])):
         desired.update(("risk","finance"))
     preferred=desired & (supported | set().union(*(ADJACENT.get(x,set()) for x in supported)))
-    groups=list(preferred)+list(supported)
+    # Stable intent order: user's keyword order first, then actual CV career
+    # families in evidence rank order, never unordered Python set iteration.
+    user_groups=[]
+    for phrase in re.split(r"[,;\\n]+",str(profile.get("keywords") or "")):
+        for group in sorted(role_groups(phrase)):
+            if group not in user_groups:user_groups.append(group)
+    for path in profile.get("path_keywords") or []:
+        for group in sorted(role_groups(path)):
+            if group not in user_groups:user_groups.append(group)
+    supported_order=[]
+    for row in dna.get("role_families",[]):
+        if not isinstance(row,dict):continue
+        for group in sorted(FAMILY_MAP.get(row.get("name"),set())):
+            if group not in supported_order:supported_order.append(group)
+    groups=list(dict.fromkeys(
+        [g for g in user_groups if g in preferred]
+        +[g for g in supported_order if g in supported]
+        +sorted(preferred)))
     queries={
         "operations":["business operations manager","operations manager","operations specialist"],
         "project":["project manager","programme manager","PMO manager"],
@@ -143,7 +160,7 @@ def location_eligible(job,profile):
     if not user_city or user_city.casefold() in {"any","all","anywhere","all cities","nationwide","belgium","remote"}:
         return True
     # Support multiple explicit cities rather than silently applying one.
-    requested=[x.strip().casefold() for x in re.split(r"[,;|]+",user_city) if x.strip()]
+    requested=[x.strip().casefold() for x in re.split(r"[,;|/&]+",user_city) if x.strip()]
     if not requested:return True
     place=" ".join(str(job.get(key) or "") for key in ("city","location_label")).casefold()
     # Countrywide and European remote roles are eligible without a single-city address.
