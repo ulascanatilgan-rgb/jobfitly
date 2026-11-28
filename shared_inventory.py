@@ -19,17 +19,27 @@ from career_dna import career_dna
 
 BOARD_SEEDS={
  "greenhouse":[("gitlab","GitLab"),("mollie","Mollie"),("datadog","Datadog"),("pleo","Pleo")],
- "lever":[("Qover","Qover"),("milltownpartners","Milltown Partners"),
-          ("tsmg","TSMG"),("rws","RWS"),("valpeo.com","VALPEO")],
- "ashby":[("alan","Alan"),("payflip","Payflip"),("deliveroo","Deliveroo"),
-          ("shield","Shield AI"),("trm-labs","TRM Labs"),
-          ("granular-energy.com","Granular Energy")],
+ "lever":[
+  ("Qover","Qover"),("milltownpartners","Milltown Partners"),
+  ("tsmg","TSMG"),("rws","RWS"),("valpeo.com","VALPEO"),
+  ("kpler","Kpler"),("jobgether","Jobgether"),("vogo","Vogo")
+ ],
+ "ashby":[
+  ("alan","Alan"),("payflip","Payflip"),("deliveroo","Deliveroo"),
+  ("shield","Shield AI"),("trm-labs","TRM Labs"),
+  ("granular-energy.com","Granular Energy"),
+  # Public employer-hosted boards verified from real career vacancy pages.
+  ("mollie","Mollie"),("warren","Warren"),("fyst","FYST"),
+  ("airwallex","Airwallex"),("moss","Moss"),
+  ("lendable","Lendable"),("candex","Candex"),("solidgate","Solidgate"),
+  ("conveo","Conveo"),("Clera","Clera"),("horizon3ai","Horizon3")
+ ],
 }
 TTL_SECONDS=3*3600
 MAX_STALE_SECONDS=24*3600
 LEASE_SECONDS=100
 HTTP_TIMEOUT=(2.5,7)
-HEADERS={"Accept":"application/json","User-Agent":"JobFitly public career listings (respectful 3h cache)"}
+HEADERS={"Accept":"application/json","User-Agent":"Waydefine public career listings (respectful 3h cache)"}
 
 def _boards():
  boards={key:list(val) for key,val in BOARD_SEEDS.items()}
@@ -221,7 +231,7 @@ def refresh_shared(db,profile=None):
  finally:con.close()
  boards=_boards()
  gathered=[];success=0
- with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+ with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
   futures={pool.submit(_fetch_board,item):item for item in boards}
   for future in concurrent.futures.as_completed(futures):
    try:
