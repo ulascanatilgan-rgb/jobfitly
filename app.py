@@ -9,7 +9,7 @@ from job_search import search_jobs, selected_languages, required_languages, lang
 from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
-from career_search import career_targets, role_relevance, role_eligible, location_eligible
+from career_search import career_targets, role_relevance, role_eligible, location_eligible, prepare_search_context
 from occupation_profile import occupation_profile
 from search_quality import search_waves, qualified_pool_size
 from next_moves import alternative_next_moves, valid_path_titles, path_title_match
@@ -322,6 +322,8 @@ def preview_candidates(uid,max_results=5):
  feedback=feedback_for(uid)
  seen=previously_seen(uid)
  dna=p.get('career_dna') or career_dna(cv)
+ p['cv_for_matching']=cv
+ prepare_search_context(p)
  selected=selected_languages(p.get('language'))
  results=[]
  for job in shared_jobs(DB,p.get('country'),650):
@@ -429,6 +431,7 @@ def fetch_candidates(profile):
                      r'Türkiye|Spain|Italy|Portugal|Poland|Canada)\b',place,re.I)
   if detected:original['country']=detected.group()
  original['path_keywords']=valid_path_titles(original.get('path_keywords'))
+ prepare_search_context(original)
  original['search_scope']='Only selected country/cities or explicitly eligible remote; hard language requirements and proven CV specialties'
  waves=search_waves(original)
  unique={};errors=[]
@@ -539,6 +542,7 @@ def run_search(uid):
  # Build a fresh per-user occupational search plan from this user's actual CV.
  # Extracted titles are independently backed by quotes in their CV.
  p['occupation_profile']=occupation_profile(p)
+ prepare_search_context(p)
  app.logger.info('Career search profession profile: role_titles=%s method=%s',
                  len(p['occupation_profile'].get('roles',[])),p['occupation_profile'].get('method'))
  # Recover interrupted searches when a browser disconnects or worker terminates.
