@@ -9,6 +9,7 @@ from job_search import search_jobs, selected_languages, required_languages, lang
 from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
+from career_search import career_targets, role_relevance, role_eligible, location_eligible
 from next_moves import alternative_next_moves, valid_path_titles, path_title_match
 from shared_inventory import prepare_inventory, shared_jobs, refresh_shared
 from preferences import normalize_preferences, preference_alignment, preference_constraints_match
@@ -313,6 +314,8 @@ def preview_candidates(uid,max_results=5):
  for job in shared_jobs(DB,p.get('country'),650):
   if is_seen(job,seen):continue
   if not preference_constraints_match(job,p.get('swipes')):continue
+  if not location_eligible(job,p):continue
+  if not role_eligible(job,dict(p,cv_for_matching=cv),dna):continue
   if not specialty_fit(job.get('title'),cv):continue
   if feedback_penalty(job,feedback)>=100:continue
   if not language_eligible(job,selected):continue
@@ -396,7 +399,11 @@ def _related_role_focus(cv_text):
  return [focus for keywords,focus in categories if any(re.search(r'\b'+re.escape(w)+r'\b',cv) for w in keywords)][:4]
 
 def fetch_candidates(profile):
- """Shared employer ATS + existing public feeds; paid web searches only when needed."""
+ """Find professionally relevant live jobs through employer APIs, feeds and the web.
+
+ Hard gates are applied BEFORE ranking and before deciding search depth. Raw
+ inventory volume must not suppress deeper focused discovery.
+ """
  original=dict(profile)
  cv=original.get('cv_for_matching') or original.get('cv_text_preview') or ''
  original['cv_for_matching']=cv
@@ -406,58 +413,50 @@ def fetch_candidates(profile):
                      r'United States|Luxembourg|Switzerland|Ireland|Turkey|'
                      r'Türkiye|Spain|Italy|Portugal|Poland|Canada)\b',place,re.I)
   if detected:original['country']=detected.group()
- focus=_role_queries(cv,original.get('keywords'))
- chosen=valid_path_titles(original.get('path_keywords'))
- original['search_focus']='; '.join((chosen+focus)[:6]) or '; '.join(_related_role_focus(cv))
- original['path_keywords']=chosen
- original['search_scope']='Source-backed CV-related roles, national and eligible remote'
+ focus=career_targets(original)
+ original['path_keywords']=valid_path_titles(original.get('path_keywords'))
+ original['search_scope']='Explicit selected location and eligible remote; mandatory selected languages; proven CV skills'
  unique={};errors=[]
+ dna=original.get('career_dna') or career_dna(cv)
  def merge(rows):
   for job in rows:
-   link=job.get('url') or ''
+   link=str(job.get('url') or '')
    if not _valid_public_link(link):continue
    if not preference_constraints_match(job,original.get('swipes')):continue
    if not language_eligible(job,original.get('language')):continue
-   # Employer ATS feeds list currently published vacancies. Their first
-   # publication dates can be older than 30 days without implying closure.
+   if not location_eligible(job,original):continue
+   if not specialty_fit(job.get('title'),cv):continue
+   if not role_eligible(job,original,dna):continue
    if job.get('source') not in {'Greenhouse','Lever','Ashby'} and job.get('published') and not _recent(job['published']):continue
-   # Do not let public web links with unrelated geography slip into the shortlist.
    key=link.split('?')[0].rstrip('/').lower()
    unique.setdefault(key,job)
- merge(shared_jobs(DB,original.get('country')))
+ merge(shared_jobs(DB,original.get('country'),1800))
  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
   feeds_future=pool.submit(discover_feed_jobs,original)
   ats_future=pool.submit(refresh_shared,DB,original)
   try:
    jobs,feed_errors=feeds_future.result()
-   errors.extend(feed_errors)
-   merge(jobs)
+   errors.extend(feed_errors);merge(jobs)
   except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
    errors.append('feeds:'+type(exc).__name__)
   try:merge(ats_future.result())
   except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
    errors.append('ats:'+type(exc).__name__)
- dna=original.get('career_dna') or career_dna(cv)
- related=sum(1 for job in unique.values()
-             if specialty_fit(job.get('title'),cv)
-             and (lexical_fit(job,cv)[0]>=35 or role_similarity(job,dna)>=55
-                  or (path_title_match(job,chosen)>=.7
-                      and len(tokenize(job.get('description',''))&tokenize(cv))>=2)))
- # Existing billable web search is an optional fallback; skip it when the
- # shared free sources already provide enough plausible CV-backed positions.
- if related<16 and os.getenv('OPENAI_API_KEY'):
-  try:
-   for job in search_jobs(original,30):
-    country=str(original.get('country') or '').strip().lower()
-    listed=str(job.get('country') or '').strip().lower()
-    remote=any(word in (str(job.get('title') or '')+' '+str(job.get('description') or '')).lower()
-               for word in ('remote europe','remote anywhere','worldwide remote','remote within europe'))
-    if country and listed and country not in listed and not remote:continue
-    merge([job])
-  except (requests.RequestException,ValueError,TypeError) as exc:
-   errors.append('web:'+type(exc).__name__)
- app.logger.info('Shared discovery total=%s cv_related=%s errors=%s',
-                 len(unique),related,len(errors))
+ direct_count=len(unique)
+ # At least one tailored web-search pass if enabled, even when ATS feeds
+ # contain many low-fit remote listings. Maximum two passes by default.
+ if os.getenv('OPENAI_API_KEY'):
+  passes=max(0,min(3,int(os.getenv('WAYDEFINE_WEB_SEARCH_PASSES','2'))))
+  for index in range(passes):
+   if index>0 and len(unique)>=18:break
+   query=dict(original)
+   query['search_focus']='; '.join(focus[index*4:(index+1)*4] or focus[:4])
+   try:
+    merge(search_jobs(query,30))
+   except (requests.RequestException,ValueError,TypeError,KeyError) as exc:
+    errors.append('web'+str(index+1)+':'+type(exc).__name__)
+ app.logger.info('Discovery: direct_eligible=%s total_eligible=%s web_passes_allowed=%s errors=%s',
+                 direct_count,len(unique),os.getenv('WAYDEFINE_WEB_SEARCH_PASSES','2'),len(errors))
  return list(unique.values()),errors
 
 def get_run(uid,date=None):
@@ -471,8 +470,9 @@ def get_run(uid,date=None):
    LEFT JOIN watchlist w ON w.job_id=j.id AND w.user_id=j.user_id
    WHERE r.run_id=? AND NOT EXISTS
     (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
-   ORDER BY r.position ASC LIMIT 5""",(run['id'],)).fetchall()
-  jobs=sorted((dict(j) for j in rows if language_eligible(dict(j),profile_for(uid).get('language'))),key=lambda item:item['score'],reverse=True)
+   ORDER BY r.position ASC LIMIT 12""",(run['id'],)).fetchall()
+  p=profile_for(uid)
+  jobs=sorted((dict(j) for j in rows if language_eligible(dict(j),p.get('language')) and location_eligible(dict(j),p) and role_eligible(dict(j),p)),key=lambda item:item['score'],reverse=True)[:5]
  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
  # Only positions actually returned to the UI are recorded, not the reserves.
  remember_displayed(uid,jobs)
