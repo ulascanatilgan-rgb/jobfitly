@@ -35,9 +35,9 @@ CHOICES={
   "Balance":("flexible","hybrid","work-life","work life","part-time","wellbeing")
  },
  "mode":{
-  "Remote":("remote","work from home","home-based","home based"),
-  "Hybrid":("hybrid","flexible working","partial remote"),
-  "On-site":("on-site","onsite","on site","office-based","office based","in-office")
+  "Remote":("fully remote","100% remote","remote-first","remote","work from home","home-based","home based","telework","teleworking","telecommute"),
+  "Hybrid":("hybrid","hybrid work","partially remote","partly remote","partial remote","2 days from home","3 days from home","home office days","thuiswerk","télétravail","teletravail","part-time homeworking","flexible working"),
+  "On-site":("on-site","onsite","on site","on location","office-based","office based","in-office","in person","on premises","at our office")
  },
  "seniority":{
   "Specialist":("specialist","advisor","analyst","associate","consultant","engineer","individual contributor"),
@@ -109,18 +109,25 @@ def preference_alignment(job,raw):
  return round(10*total/weight_total,2)
 
 def _mode_evidence(job):
- """Classify explicit work-setting evidence without guessing from generic words."""
+ """Identify stated employer work setting; ignore negated remote mentions."""
  title=str(job.get("title") or "").lower()
- description=str(job.get("description") or "")[:6000].lower()
+ description=str(job.get("description") or "")[:9000].lower()
  place=(" ".join(str(job.get(k) or "") for k in ("city","country","location_label"))).lower()
  text=" ".join((title,description,place))
- hybrid=any(_match(text,p) for p in CHOICES["mode"]["Hybrid"])
- remote=any(_match(text,p) for p in CHOICES["mode"]["Remote"])
- onsite=any(_match(text,p) for p in CHOICES["mode"]["On-site"])
- # Hybrid descriptions often mention remote days; hybrid is the more specific signal.
- if hybrid:return "Hybrid"
- if remote:return "Remote"
- if onsite:return "On-site"
+ has_hybrid=any(_match(text,p) for p in CHOICES["mode"]["Hybrid"])
+ has_remote=any(_match(text,p) for p in CHOICES["mode"]["Remote"])
+ has_on_site=any(_match(text,p) for p in CHOICES["mode"]["On-site"])
+ # A clear employer statement overrides incidental keywords elsewhere.
+ if re.search(r"\b(?:no|not|without|geen|niet|pas de)\s+(?:full\s+)?remote\b",text):
+  has_remote=False
+ if re.search(r"\b(?:remote work|work from home|home office)\s+(?:is\s+)?(?:not\s+)?(?:available|permitted|possible)\b",text):
+  if re.search(r"\b(?:not|no|never)\s+(?:available|permitted|possible)\b",text):
+   has_remote=False
+ if re.search(r"\b(?:fully|entirely|100%)\s+on[- ]site\b|\bmust\s+(?:be\s+)?(?:in|at)\s+(?:the\s+)?office\b",text):
+  return "On-site"
+ if has_hybrid:return "Hybrid"
+ if has_remote:return "Remote"
+ if has_on_site:return "On-site"
  return "Unknown"
 
 def preference_constraints_match(job,raw):
