@@ -591,7 +591,7 @@ def run_search(uid):
   shortlist=distinct
   # Feed-backed listings are sourced directly from active provider APIs; avoid
   # redundant per-link HTTP checks that routinely get bot-blocked or time out.
-  trusted={'Himalayas','Jobicy','Arbeitnow','Greenhouse','Lever','Ashby','Adzuna'}
+  trusted={'Himalayas','Jobicy','Arbeitnow','Greenhouse','Lever','Ashby','Adzuna','LexGO'}
   checked=[];unverified=[]
   candidates_to_check=[]
   for item in shortlist:
