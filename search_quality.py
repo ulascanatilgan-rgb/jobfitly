@@ -28,17 +28,17 @@ def search_waves(profile):
          "Company career pages, SmartRecruiters, Greenhouse, Lever, Ashby, "
          "Workday, Teamtailor and employer-managed vacancy pages. Prefer direct "
          "employer application links and confirm location requirements."),
-        ("major_boards",roles[2:6] or roles[:4],
+        ("major_boards",list(dict.fromkeys(roles[:2]+roles[4:7])),
          "Search indexed, individually clickable job listing URLs on LinkedIn "
          "(site:linkedin.com/jobs/view/), Indeed (site:indeed.com/viewjob or "
          "country-specific Indeed /viewjob?jk=...), StepStone "
          "(site:stepstone.be/jobs-- or /vacatures--), and employer careers. "
          "Do not return generic search or category listing pages."),
-        ("adjacent_titles",roles[4:9] or roles[:4],
+        ("adjacent_titles",list(dict.fromkeys(roles[:2]+roles[7:10])),
          "Look for CV-supported alternative job-title synonyms, role variants, "
          "and equivalent responsibilities on company careers pages and recognized "
          "local job boards; verify same occupational function and seniority."),
-        ("last_mile",roles[7:13] or roles[:4],
+        ("last_mile",list(dict.fromkeys(roles[:2]+roles[10:14])),
          "Find additional high-quality employer-specific vacancies through "
          "indexed job postings, regional specialty boards, LinkedIn, Indeed, "
          "StepStone, Workday and ATS. No job-search result pages; actual job only."),
