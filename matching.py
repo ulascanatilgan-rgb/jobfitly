@@ -46,15 +46,24 @@ _SYNONYMS = {
     "ontwikkelaar": "developer", "developpeur": "developer",
 }
 _SPECIALTY = (
-    (r"\b(?:hr|human resources|head of people|chief people officer|people director|people and culture|talent acquisition|recruitment|recruiting)\b",
-     r"\b(?:hr manager|hr director|head of hr|human resources manager|human resources director|people director|people operations manager|talent acquisition manager|talent acquisition director|recruitment manager|recruiting manager|hr business partner|human resources business partner)\b"),
-    (r"\b(?:physician|doctor|registered nurse|pharmacist|surgeon|medical director)\b",
-     r"\b(?:physician|doctor of medicine|medical doctor|registered nurse|nursing degree|licensed pharmacist|surgeon)\b"),
-    (r"\b(?:attorney|solicitor|barrister|legal counsel|general counsel)\b",
-     r"\b(?:attorney|solicitor|barrister|lawyer|legal counsel|law degree|juris doctor)\b"),
+    # Specialist titles must be supported by qualifications or occupation
+    # evidence in the CV itself. The candidate's job *preferences* are never proof.
+    (r"\b(?:hr manager|hr director|head of people|chief people officer|people director|talent acquisition|recruitment manager|recruiting manager|human resources business partner)\b",
+     r"\b(?:human resources|hr manager|hr director|head of hr|people operations|talent acquisition|recruitment manager|recruiting manager|hr business partner)\b"),
+    (r"\b(?:physician|medical doctor|general practitioner|family doctor|surgeon|psychiatrist|medical director|radiologist|anesthetist|anaesthetist|pediatrician|paediatrician)\b",
+     r"\b(?:physician|doctor of medicine|medical doctor|mbbs|medical license|medical licence|medical degree|general practitioner|family doctor|surgeon|psychiatrist|medical residency|residency in medicine)\b"),
+    (r"\b(?:dentist|dental surgeon|orthodontist)\b",
+     r"\b(?:dentist|dental degree|dentistry|orthodontist|dental surgeon)\b"),
+    (r"\b(?:registered nurse|staff nurse|clinical nurse|midwife|nurse practitioner)\b",
+     r"\b(?:registered nurse|nursing degree|bsc nursing|nurse|nursing license|nursing licence|midwife|verpleegkundige)\b"),
+    (r"\b(?:pharmacist|clinical pharmacist)\b",
+     r"\b(?:licensed pharmacist|registered pharmacist|pharmacist|pharmd|pharmacy degree|pharmaceutical sciences)\b"),
+    (r"\b(?:attorney|solicitor|barrister|litigation lawyer|legal counsel|general counsel|notary|advocate)\b",
+     r"\b(?:attorney|solicitor|barrister|lawyer|legal counsel|law degree|juris doctor|litigation|legal practice|advocaat|avocat|notary)\b"),
     (r"\b(?:software engineer|software developer|frontend developer|backend developer)\b",
      r"\b(?:software engineer|software developer|software development|python developer|java developer|javascript developer|computer science degree)\b"),
 )
+
 _EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s()./-]{8,}\d(?!\w)")
 
