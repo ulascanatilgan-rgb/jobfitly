@@ -93,7 +93,8 @@ def preliminary_fit(job,profile):
     title_strength=role_relevance(job,profile)
     if title_strength<65:return 0.0
     lex,_=lexical_fit(job,cv)
-    cv_words=_tokens(cv)
+    cv_words=(profile.get("_match_cache") or {}).get("cv_words")
+    if cv_words is None:cv_words=_tokens(cv)
     desc_words=_tokens(str(job.get("description") or "")[:7000])
     shared=len(cv_words & desc_words)
     context=min(100,shared*9)
