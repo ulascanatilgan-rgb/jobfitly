@@ -432,9 +432,18 @@ def fetch_candidates(profile):
    key=link.split('?')[0].rstrip('/').lower()
    unique.setdefault(key,job)
  merge(shared_jobs(DB,original.get('country'),1800))
- with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+ try:passes=max(0,min(3,int(os.getenv('WAYDEFINE_WEB_SEARCH_PASSES','2'))))
+ except ValueError:passes=2
+ # Fetch job APIs and the first focused web search IN PARALLEL. A slow ATS
+ # board must not unnecessarily delay the web results.
+ with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
   feeds_future=pool.submit(discover_feed_jobs,original)
   ats_future=pool.submit(refresh_shared,DB,original)
+  first_future=None
+  if os.getenv('OPENAI_API_KEY') and passes:
+   first_query=dict(original)
+   first_query['search_focus']='; '.join(focus[:4])
+   first_future=pool.submit(search_jobs,first_query,30)
   try:
    jobs,feed_errors=feeds_future.result()
    errors.extend(feed_errors);merge(jobs)
@@ -443,17 +452,19 @@ def fetch_candidates(profile):
   try:merge(ats_future.result())
   except (requests.RequestException,ValueError,TypeError,sqlite3.Error) as exc:
    errors.append('ats:'+type(exc).__name__)
- direct_count=len(unique)
- # At least one tailored web-search pass if enabled, even when ATS feeds
- # contain many low-fit remote listings. Maximum two passes by default.
+  direct_count=len(unique)
+  if first_future is not None:
+   try:merge(first_future.result())
+   except (requests.RequestException,ValueError,TypeError,KeyError) as exc:
+    errors.append('web1:'+type(exc).__name__)
+ # A second family-focused pass is valuable only when too few qualified
+ # openings survived (default maximum 2 calls per manual search).
  if os.getenv('OPENAI_API_KEY'):
-  passes=max(0,min(3,int(os.getenv('WAYDEFINE_WEB_SEARCH_PASSES','2'))))
-  for index in range(passes):
-   if index>0 and len(unique)>=18:break
+  for index in range(1,passes):
+   if len(unique)>=18:break
    query=dict(original)
    query['search_focus']='; '.join(focus[index*4:(index+1)*4] or focus[:4])
-   try:
-    merge(search_jobs(query,30))
+   try:merge(search_jobs(query,30))
    except (requests.RequestException,ValueError,TypeError,KeyError) as exc:
     errors.append('web'+str(index+1)+':'+type(exc).__name__)
  app.logger.info('Discovery: direct_eligible=%s total_eligible=%s web_passes_allowed=%s errors=%s',
