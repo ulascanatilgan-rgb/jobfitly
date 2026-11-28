@@ -122,6 +122,11 @@ def role_relevance(job,profile,dna=None):
     support=set().union(*(FAMILY_MAP.get(r.get("name"),set())
                           for r in dna.get("role_families",[]) if isinstance(r,dict)))
     if not support:return 0
+    # A generic 'operations' word must never disguise a specialist track:
+    # e.g. People Operations or Vehicle Operations without proven experience.
+    restricted={"people","healthcare","education","transport","hospitality"}
+    if any(group in groups and group not in support for group in restricted):
+        return 0
     adjacent=set().union(*(ADJACENT.get(group,set()) for group in support))
     target_groups=set().union(*(role_groups(q) for q in career_targets(profile)))
     # Professional track matters more than soft skills or generic text overlap.
