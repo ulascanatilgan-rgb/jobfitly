@@ -24,13 +24,13 @@ def _canonical(url):
         path=unquote(parts.path).rstrip("/").casefold()
         if parts.scheme!="https" or not host or not path or path=="/":
             return None
-        if host.endswith("indeed.com") or ".indeed." in host or host.startswith("indeed."):
+        if re.search(r"(^|\.)indeed\.[a-z]{2,3}(?:\.[a-z]{2})?$",host):
             job_id=parse_qs(parts.query).get("jk",[])
             if path not in ("/viewjob","/rc/clk","/pagead/clk") or not job_id:
                 return None
             if not re.fullmatch(r"[a-zA-Z0-9]{8,32}",job_id[0]):return None
             return "indeed",job_id[0].casefold()
-        if host.endswith("linkedin.com"):
+        if host=="linkedin.com" or host.endswith(".linkedin.com"):
             match=re.search(r"^/jobs/view/[^/]*?(\d{7,15})$",path)
             if not match:return None
             return "linkedin",match.group(1)
@@ -50,8 +50,8 @@ def _canonical(url):
 
 def _source_name(url):
     host=(urlsplit(str(url)).hostname or "").lower()
-    if "linkedin.com" in host:return "LinkedIn (indexed vacancy)"
-    if "indeed." in host:return "Indeed (indexed vacancy)"
+    if host=="linkedin.com" or host.endswith(".linkedin.com"):return "LinkedIn (indexed vacancy)"
+    if re.search(r"(^|\.)indeed\.[a-z]{2,3}(?:\.[a-z]{2})?$",host):return "Indeed (indexed vacancy)"
     if "stepstone." in host:return "StepStone (indexed vacancy)"
     if "yaymonday.be" in host:return "yaymonday (indexed vacancy)"
     return "Employer / indexed web vacancy"
