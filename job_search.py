@@ -7,21 +7,47 @@ import datetime
 import json
 import os
 import re
-from urllib.parse import urlsplit, unquote
+from urllib.parse import urlsplit, parse_qs, unquote
 
 import requests
 
 
 def _canonical(url):
+    """Provider-aware identity: Indeed URLs need jk=...; search pages are not jobs."""
     try:
-        parts = urlsplit(str(url).strip())
-        host = (parts.hostname or "").lower().removeprefix("www.")
-        path = unquote(parts.path).rstrip("/")
-        if parts.scheme != "https" or not host or not path or path == "/":
+        parts=urlsplit(str(url).strip())
+        host=(parts.hostname or "").casefold().removeprefix("www.")
+        path=unquote(parts.path).rstrip("/").casefold()
+        if parts.scheme!="https" or not host or not path or path=="/":
             return None
-        return host, path
-    except (ValueError, AttributeError):
+        if "indeed." in host:
+            job_id=parse_qs(parts.query).get("jk",[])
+            if path not in ("/viewjob","/rc/clk","/pagead/clk") or not job_id:
+                return None
+            return host,"/viewjob/"+job_id[0].casefold()
+        if "linkedin.com" in host:
+            # Results hubs (/jobs/operations-jobs) are NOT job advertisements.
+            if not re.search(r"/jobs/view/[^/]*\d{6,}",path):return None
+        if "stepstone." in host:
+            # StepStone result lists may include hundreds of unrelated cards.
+            if not re.search(r"/(?:jobs|vacatures|emplois|offres-d-emploi)--[^/]+--\d+-inline\.html$",path):
+                return None
+        if "yaymonday.be" in host and not re.fullmatch(r"/jobs/[a-z0-9][a-z0-9-]+",path):
+            return None
+        if re.search(r"/(?:search|search-results|job-search|all-jobs|jobs/search|job-list|find-a-job)$",path):
+            return None
+        return host,path
+    except (ValueError,AttributeError,TypeError):
         return None
+
+
+def _source_name(url):
+    host=(urlsplit(str(url)).hostname or "").lower()
+    if "linkedin.com" in host:return "LinkedIn (indexed vacancy)"
+    if "indeed." in host:return "Indeed (indexed vacancy)"
+    if "stepstone." in host:return "StepStone (indexed vacancy)"
+    if "yaymonday.be" in host:return "yaymonday (indexed vacancy)"
+    return "Employer / indexed web vacancy"
 
 
 def _sources(response):
@@ -253,8 +279,6 @@ def search_jobs(profile, max_age_days=14):
         identity = _canonical(url)
         if identity not in grounded_urls or identity in seen:
             continue
-        if any(domain in identity[0] for domain in ("linkedin.com", "indeed.com", "glassdoor.com")):
-            continue
         title = str(entry.get("title") or "").strip()
         company = str(entry.get("company") or "").strip()
         published = str(entry.get("published") or "").strip()
@@ -276,6 +300,6 @@ def search_jobs(profile, max_age_days=14):
             "description": description[:12000],
             "url": url,
             "published": published,
-            "source": "OpenAI web search" if published else "OpenAI web search · date unverified",
+            "source": _source_name(url) + ("" if published else " · date unverified"),
         })
     return output
