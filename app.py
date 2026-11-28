@@ -554,7 +554,8 @@ def run_search(uid):
   candidates=[]
   allowed_languages=selected_languages(p.get('language'))
   for j in raw:
-   if is_seen(j,seen):continue
+   # Previously shown postings may fill gaps only AFTER fresh candidates;
+   # otherwise permanent seen-history could force an empty results page.
    if not preference_constraints_match(j,p.get('swipes')):continue
    if feedback_penalty(j,feedback)>=100:continue
    if not language_eligible(j,allowed_languages):continue
@@ -571,13 +572,14 @@ def run_search(uid):
     cv_fit=max(cv_fit,44+min(8,2*len(path_overlap)))
     evidence=evidence or path_overlap[:6]
    if cv_fit<56:
-    # Allow an analytically justified career transition into AI review only.
-    # Soft-skills vocabulary in a job description is not itself CV fit.
-    if title_fit>=85 and len(path_overlap)>=2:
-     cv_fit=max(cv_fit,48)
+    # Different professional title synonyms often share few literal words.
+    # If a title is supported by the user's actual occupational CV profile,
+    # still send it through the deep AI qualification check.
+    if title_fit>=90 and (len(path_overlap)>=1 or cv_fit>=35):
+     cv_fit=max(cv_fit,49)
      evidence=evidence or path_overlap[:5]
-    elif title_fit>=69 and len(path_overlap)>=4:
-     cv_fit=max(cv_fit,40)
+    elif title_fit>=75 and len(path_overlap)>=3:
+     cv_fit=max(cv_fit,45)
      evidence=evidence or path_overlap[:5]
     else:continue
    candidates.append((j,cv_fit,evidence))
@@ -608,7 +610,12 @@ def run_search(uid):
    final=round(max(1,min(9.8,weighted+path_bonus-negative)),1)
    if final<6.5:continue
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
+  # Preserve fresh discoveries first; reuse still-active old matches only
+  # when needed to complete five qualified recommendations.
   ranked.sort(key=lambda entry:entry[0],reverse=True)
+  fresh=[entry for entry in ranked if not is_seen(entry[1],seen)]
+  earlier=[entry for entry in ranked if is_seen(entry[1],seen)]
+  ranked=fresh+earlier
   distinct=[];taken=set()
   for entry in ranked:
    keys=_job_keys(entry[1])
@@ -672,7 +679,10 @@ def run_search(uid):
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
    for position,(score,j,evidence) in enumerate(checked[:12],1):
-    c.execute("""INSERT INTO jobs(user_id,external_id,title,company,city,country,description,url,source,published,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,external_id) DO UPDATE SET description=excluded.description,url=excluded.url,published=excluded.published,source=excluded.source""",(uid,j['external_id'],j['title'][:240],j['company'][:200],j['city'][:230],j['country'][:100],j['description'][:14000],j['url'][:1400],j['source'],str(j['published']),now()))
+    source_label=str(j.get('source') or 'Source-backed')
+    if is_seen(j,seen) and 'previously shown' not in source_label:
+     source_label+=' · previously shown'
+    c.execute("""INSERT INTO jobs(user_id,external_id,title,company,city,country,description,url,source,published,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,external_id) DO UPDATE SET description=excluded.description,url=excluded.url,published=excluded.published,source=excluded.source""",(uid,j['external_id'],j['title'][:240],j['company'][:200],j['city'][:230],j['country'][:100],j['description'][:14000],j['url'][:1400],source_label,str(j['published']),now()))
     job=c.execute('SELECT id FROM jobs WHERE user_id=? AND external_id=?',(uid,j['external_id'])).fetchone()
     c.execute('INSERT INTO run_jobs(run_id,job_id,position,fit,matched_terms) VALUES(?,?,?,?,?)',(run['id'],job['id'],position,score,json.dumps(evidence)))
    c.execute("UPDATE daily_runs SET state='complete' WHERE id=?",(run['id'],))
