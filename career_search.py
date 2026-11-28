@@ -138,6 +138,7 @@ def career_targets(profile):
  cv=str(profile.get("cv_for_matching") or profile.get("cv_text_preview") or "")
  dna=profile.get("career_dna") or career_dna(cv)
  support=_support_groups(profile,dna)
+ role_titles=_validated_roles(profile)
  allowed=set(support)
  for group in support:allowed.update(ADJACENT.get(group,set()))
  result=[]
@@ -146,12 +147,12 @@ def career_targets(profile):
  for phrase in re.split(r"[,;\n]+",str(profile.get("keywords") or "")):
   phrase=phrase.strip()
   if not 3<len(phrase)<=70 or len(phrase.split())>8:continue
-  if role_groups(phrase)&allowed or any(_title_overlap(phrase,r)>=.45 for r in _validated_roles(profile)):
+  if role_groups(phrase)&allowed or any(_title_overlap(phrase,r)>=.45 for r in role_titles):
    result.append(phrase)
  for p in profile.get("path_keywords") or []:
-  if isinstance(p,str) and (role_groups(p)&allowed or any(_title_overlap(p,r)>=.45 for r in _validated_roles(profile))):
+  if isinstance(p,str) and (role_groups(p)&allowed or any(_title_overlap(p,r)>=.45 for r in role_titles)):
    result.append(p.strip())
- result.extend(_validated_roles(profile))
+ result.extend(role_titles)
  # Universal fallback for all professions: generate specialty-based titles
  # from the actual user's CV, not from one banking/technology example.
  titles={
@@ -189,15 +190,36 @@ def career_targets(profile):
  for group in ordered:result.extend(titles.get(group,[])[:2])
  return list(dict.fromkeys(x for x in result if isinstance(x,str) and x.strip()))[:14]
 
+def prepare_search_context(profile):
+ """Compute costly CV role evidence once per user search, not per vacancy."""
+ from matching import _tokens
+ cv=str(profile.get("cv_for_matching") or profile.get("cv_text_preview") or "")
+ dna=profile.get("career_dna") or career_dna(cv)
+ support=_support_groups(profile,dna)
+ roles=_validated_roles(profile)
+ targets=career_targets(profile)
+ profile["_match_cache"]={
+  "support":support,
+  "roles":roles,
+  "targets":targets,
+  "target_groups":{g for q in targets for g in role_groups(q)},
+  "cv_words":_tokens(cv),
+ }
+ return profile
+
+
 def role_relevance(job,profile,dna=None):
  """Occupational match 0-100, CV dependent and profession independent."""
  title=str(job.get("title") or "")
  cv=str(profile.get("cv_for_matching") or profile.get("cv_text_preview") or "")
  if not specialty_fit(title,cv):return 0
  dna=dna or profile.get("career_dna") or career_dna(cv)
- support=_support_groups(profile,dna)
+ cache=profile.get("_match_cache") or {}
+ support=cache.get("support")
+ if support is None:support=_support_groups(profile,dna)
  job_groups=role_groups(title)
- role_titles=_validated_roles(profile)
+ role_titles=cache.get("roles")
+ if role_titles is None:role_titles=_validated_roles(profile)
  # Exact/similar documented CV occupation title is authoritative.
  # An unrelated generic role cannot pass solely via the user's wish list.
  best=max((_title_overlap(title,r) for r in role_titles),default=0)
@@ -213,7 +235,10 @@ def role_relevance(job,profile,dna=None):
   return 82 if best>=.48 else 0
  if job_groups & support:return 92
  adjacent=set().union(*(ADJACENT.get(g,set()) for g in support))
- if job_groups & adjacent and job_groups & {g for q in career_targets(profile) for g in role_groups(q)}:
+ target_groups=cache.get("target_groups")
+ if target_groups is None:
+  target_groups={g for q in career_targets(profile) for g in role_groups(q)}
+ if job_groups & adjacent and job_groups & target_groups:
   return 79
  if job_groups & adjacent:return 68
  # Previously unseen specialty families can still enter an AI review when
