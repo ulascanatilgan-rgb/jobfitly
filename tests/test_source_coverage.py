@@ -55,3 +55,11 @@ def test_hybrid_work_patterns_from_local_market():
     assert _mode_evidence({"description":"Fully on-site at the company office."})=="On-site"
     assert preference_constraints_match(
         {"description":"Hybrid workplace."},{"mode":["Remote","Hybrid","On-site"]})
+
+def test_indexed_country_hostnames_are_same_posting():
+    li1=_canonical("https://be.linkedin.com/jobs/view/operations-manager-at-test-4493754425")
+    li2=_canonical("https://www.linkedin.com/jobs/view/4493754425?trk=feed")
+    assert li1==li2
+    ind1=_canonical("https://be.indeed.com/viewjob?jk=0929e16c826dbd3d")
+    ind2=_canonical("https://emplois.be.indeed.com/viewjob?jk=0929e16c826dbd3d&from=search")
+    assert ind1==ind2
