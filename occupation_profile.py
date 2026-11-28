@@ -15,7 +15,7 @@ ROLE_WORDS = re.compile(
     r"physician|doctor|surgeon|nurse|dentist|pharmacist|"
     r"attorney|lawyer|solicitor|barrister|counsel|paralegal|"
     r"teacher|professor|lecturer|architect|electrician|"
-    r"technician|mechanic|inspector|auditor|accountant|"
+    r"technician|mechanic|geologist|hydrogeologist|ecologist|inspector|auditor|accountant|"
     r"controller|scientist|researcher|therapist|psychologist|"
     r"veterinarian|pilot|driver|chef|cook|electrician|"
     r"recruiter|carpenter|plumber|operator|firefighter|"
