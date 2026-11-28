@@ -610,6 +610,9 @@ def run_search(uid):
    used={job.get('url') for _,job,_ in checked}
    for score,job,evidence in unverified:
     if len(checked)>=12:break
+    # Search-cited but bot-blocked links are allowed only as very strong
+    # matches, explicitly labelled as not independently verified.
+    if score<7.2:continue
     if job.get('url') in used:continue
     candidate=dict(job)
     candidate['source']=str(candidate.get('source') or 'Source-backed')+' · link not independently verified'
