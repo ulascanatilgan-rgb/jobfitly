@@ -329,6 +329,7 @@ def preview_candidates(uid,max_results=5):
   if alignment is None:weighted=.82*(fit/10)+.18*(dna_fit/10)
   else:weighted=.65*(fit/10)+.25*alignment+.10*(dna_fit/10)
   score=round(max(1,min(9.8,weighted+path_fit*1.1-feedback_penalty(job,feedback))),1)
+  if score<6.5:continue
   results.append(dict(job,score=score,matched_terms=terms))
  results.sort(key=lambda item:item['score'],reverse=True)
  unique=[];taken=set()
@@ -472,7 +473,7 @@ def get_run(uid,date=None):
     (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
    ORDER BY r.position ASC LIMIT 12""",(run['id'],)).fetchall()
   p=profile_for(uid)
-  jobs=sorted((dict(j) for j in rows if language_eligible(dict(j),p.get('language')) and location_eligible(dict(j),p) and role_eligible(dict(j),p)),key=lambda item:item['score'],reverse=True)[:5]
+  jobs=sorted((dict(j) for j in rows if float(j['score'])>=6.5 and language_eligible(dict(j),p.get('language')) and location_eligible(dict(j),p) and role_eligible(dict(j),p)),key=lambda item:item['score'],reverse=True)[:5]
  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
  # Only positions actually returned to the UI are recorded, not the reserves.
  remember_displayed(uid,jobs)
@@ -625,7 +626,7 @@ def run_search(uid):
                   len(raw),len(candidates),len(shortlist),len(checked[:5]))
   if not checked:
    with conn() as c:c.execute("DELETE FROM daily_runs WHERE user_id=? AND local_day=? AND state='working'",(uid,today()))
-   return None,'No new, relevant source-backed vacancies were found. Previously shown jobs will not be repeated. Try adjusting preferences or searching later.',422
+   return None,'No verified vacancies passed your CV, role, language, location and 6.5/10 relevance checks. Waydefine will not fill empty slots with unrelated jobs. Try a broader city selection or search again later.',422
   with conn() as c:
    run=c.execute("SELECT id FROM daily_runs WHERE user_id=? AND local_day=?",(uid,today())).fetchone()
    for position,(score,j,evidence) in enumerate(checked[:12],1):
