@@ -518,6 +518,9 @@ def run_search(uid):
    if not preference_constraints_match(j,p.get('swipes')):continue
    if feedback_penalty(j,feedback)>=100:continue
    if not language_eligible(j,allowed_languages):continue
+   if not location_eligible(j,p):continue
+   title_fit=role_relevance(j,p,dna)
+   if title_fit<65:continue
    if not specialty_fit(j.get('title'),p['cv_for_matching']):continue
    cv_fit,evidence=lexical_fit(j,p['cv_for_matching'])
    path_fit=path_title_match(j,p.get('path_keywords'))
@@ -528,35 +531,42 @@ def run_search(uid):
     cv_fit=max(cv_fit,44+min(8,2*len(path_overlap)))
     evidence=evidence or path_overlap[:6]
    if cv_fit<56:
-    # Keep genuinely adjacent roles when CV evidence matches their actual duties.
-    overlap=sorted(tokenize(j.get('description','')) & tokenize(p['cv_for_matching']))
-    if len(overlap)<2 and cv_fit==0:continue
-    cv_fit=max(cv_fit,min(52,27+3.5*len(overlap)))
-    evidence=evidence or overlap[:6]
+    # Allow an analytically justified career transition into AI review only.
+    # Soft-skills vocabulary in a job description is not itself CV fit.
+    if title_fit>=85 and len(path_overlap)>=2:
+     cv_fit=max(cv_fit,48)
+     evidence=evidence or path_overlap[:5]
+    elif title_fit>=69 and len(path_overlap)>=4:
+     cv_fit=max(cv_fit,40)
+     evidence=evidence or path_overlap[:5]
+    else:continue
    candidates.append((j,cv_fit,evidence))
   # Semantic validation checks requirements vs. real CV, not aspirations.
-  candidates.sort(key=lambda entry:entry[1]+23*path_title_match(entry[0],p.get('path_keywords')),reverse=True)
+  candidates.sort(key=lambda entry:.6*entry[1]+.4*role_relevance(entry[0],p,dna)+12*path_title_match(entry[0],p.get('path_keywords')),reverse=True)
   candidates=candidates[:55]
-  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:25]])
+  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:35]])
   ranked=[]
   for idx,(j,cv_fit,evidence) in enumerate(candidates):
-   assessment=ai.get(idx) if idx<25 else None
+   assessment=ai.get(idx) if idx<35 else None
+   title_fit=role_relevance(j,p,dna)
    if assessment:
     semantic=assessment['cv_fit']
-    if semantic<15 and cv_fit<45:continue
-    cv_score=0.8*semantic+0.2*cv_fit
+    if semantic<48:continue
+    cv_score=.85*semantic+.15*cv_fit
    else:
+    # No AI verdict means we need independent lexical CV evidence.
+    if cv_fit<60:continue
     cv_score=cv_fit
    dna_score=role_similarity(j,dna)
    alignment=preference_alignment(j,p.get('swipes'))
    negative=feedback_penalty(j,feedback)
-   # OR within each preference field, weighted across fields; CV remains primary.
-   if alignment is None:weighted=.82*(cv_score/10)+.18*(dna_score/10)
-   else:weighted=.65*(cv_score/10)+.25*alignment+.10*(dna_score/10)
-   # Selected adjacent paths get a modest preference boost, not a hard
-   # constraint; other proven CV matches remain eligible for the five slots.
-   path_bonus=path_title_match(j,p.get('path_keywords'))*1.05
+   if alignment is None:
+    weighted=.70*(cv_score/10)+.23*(title_fit/10)+.07*(dna_score/10)
+   else:
+    weighted=.62*(cv_score/10)+.23*(title_fit/10)+.11*alignment+.04*(dna_score/10)
+   path_bonus=.35*path_title_match(j,p.get('path_keywords'))
    final=round(max(1,min(9.8,weighted+path_bonus-negative)),1)
+   if final<6.5:continue
    ranked.append((final,j,[assessment['evidence']] if assessment and assessment.get('evidence') else evidence))
   ranked.sort(key=lambda entry:entry[0],reverse=True)
   distinct=[];taken=set()
@@ -602,7 +612,7 @@ def run_search(uid):
    for direction in chosen_paths:
     for entry in checked:
      identity=entry[1].get('url')
-     if identity in already or entry[0]<5.0:continue
+     if identity in already or entry[0]<6.5:continue
      if path_title_match(entry[1],[direction])<.7:continue
      exploratory.append(entry);already.add(identity)
      break
