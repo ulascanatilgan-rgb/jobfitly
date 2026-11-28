@@ -54,8 +54,8 @@ QUESTIONS = [
  ('ownership','I enjoy taking ownership of results.')
 ]
 SWIPES = [
- ('sector','Sector',['Open to all','Technology','Finance','Healthcare','Creative','Other']),
- ('role_type','Role direction',['Operations & strategy','People & relationships','Analytical','Creative & product','Open to all']),
+ ('sector','Sector',['Open to all','Technology','Finance','Healthcare','Legal & public service','Safety & industry','Engineering & trades','Education & research','Hospitality & services','Creative','Other']),
+ ('role_type','Role direction',['Operations & strategy','People & relationships','Analytical','Creative & product','Clinical & care','Legal & policy','Technical & field','Safety & regulation','Teaching & research','Open to all']),
  ('environment','Company type',['Startup','Established company','No preference']),
  ('priority','Career priority',['Growth','Security','Balance']),
  ('mode','Work setting',['Remote','Hybrid','On-site','No preference']),
