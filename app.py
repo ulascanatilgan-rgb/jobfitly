@@ -81,14 +81,25 @@ def conn():
   c.close()
 
 def _job_keys(job):
- """Stable URL plus company/title/location fingerprint; no CV data stored."""
- parsed=urlparse(str(job.get('url') or '').strip())
- canonical=(parsed.netloc.lower()+parsed.path.rstrip('/').lower()) if parsed.netloc else ''
- if parsed.query and len(parsed.path.strip('/'))<5:
-  canonical+='?'+parsed.query.lower()
+ """Provider-aware identity plus company/title/place fingerprint.
+
+ Indeed's /viewjob page requires the jk= parameter. Previously all Indeed
+ vacancies were incorrectly treated as the same URL in seen history and in
+ current-run deduplication.
+ """
+ url=str(job.get('url') or '').strip()
+ identity=_canonical(url)
+ if identity:
+  canonical='|'.join(identity)
+ else:
+  parsed=urlparse(url)
+  canonical=(parsed.netloc.lower()+parsed.path.rstrip('/').lower()) if parsed.netloc else ''
+  if parsed.query and len(parsed.path.strip('/'))<5:
+   canonical+='?'+parsed.query.lower()
  base='|'.join(re.sub(r'\W+',' ',str(job.get(k) or '').casefold()).strip()
                for k in ('company','title','city','country'))
- return tuple(key for key in (('url:'+canonical if canonical else ''),('role:'+base if base.strip('| ' ) else '')) if key)
+ return tuple(key for key in (('url:'+canonical if canonical else ''),
+                               ('role:'+base if base.strip('| ') else '')) if key)
 
 def previously_seen(uid):
  with conn() as c:
