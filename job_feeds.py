@@ -190,6 +190,51 @@ def _himalayas(profile,code,query=""):
                        ", ".join(map(str,restrictions)) or "Worldwide"))
     return [j for j in out if j]
 
+def _lexgo(profile,code):
+    """Official permitted LexGO REST API for current Belgian/Luxembourg legal
+    and compliance openings. Follow click_url and never bulk republish listings.
+    A detail request is mandatory before recommending a job.
+    """
+    if code not in ("BE","LU"):
+        return []
+    cv=(str(profile.get("cv_for_matching") or "")+" "+
+        str(profile.get("keywords") or "")).casefold()
+    if not re.search(r"\b(risk|audit|compliance|legal|regulatory|governance|fraud)\b",cv):
+        return []
+    from job_search import selected_languages
+    langs=selected_languages(profile.get("language"))
+    only_english=bool(langs) and langs=={"english"}
+    terms=["compliance","risk","audit"]
+    queries=[x for x in terms if x in cv] or terms[:2]
+    result=[];seen=set()
+    for q in queries[:2]:
+        params={"domain":code.lower(),"q":q,"limit":15}
+        if only_english:params["language"]="en"
+        data=_fetch_json("https://www.lexgo.be/api/v1/jobs",params)
+        for item in data.get("jobs",[])[:15]:
+            if not isinstance(item,dict):continue
+            job_id=item.get("id")
+            if not job_id or job_id in seen or len(seen)>=12:continue
+            seen.add(job_id)
+            try:detail=_fetch_json("https://www.lexgo.be/api/v1/jobs/"+str(int(job_id)),{})
+            except (requests.RequestException,ValueError,TypeError):
+                continue
+            titles=detail.get("titles") or {}
+            descriptions=detail.get("descriptions") or {}
+            if not isinstance(titles,dict) or not isinstance(descriptions,dict):continue
+            title=titles.get("en") or titles.get("fr") or titles.get("nl")
+            description=descriptions.get("en") or descriptions.get("fr") or descriptions.get("nl")
+            company=detail.get("company") or {}
+            company=company.get("name") if isinstance(company,dict) else ""
+            place=detail.get("location") or {}
+            city=place.get("city") if isinstance(place,dict) else ""
+            country=place.get("country") if isinstance(place,dict) else ""
+            job=_job(title,company,description,detail.get("click_url"),
+                     detail.get("published_at"),"LexGO",city,
+                     country or profile.get("country") or "",city)
+            if job:result.append(job)
+    return result
+
 def discover_feed_jobs(profile):
     """Return normalized vacancies from independently maintained public APIs.
 
@@ -206,6 +251,7 @@ def discover_feed_jobs(profile):
     if not focus:focus=queries[:2]
     focus=list(dict.fromkeys(focus))[:4]
     tasks=[("jobicy",lambda:_jobicy(profile,code))]
+    if code in ("BE","LU"):tasks.append(("lexgo",lambda:_lexgo(profile,code)))
     for i,phrase in enumerate(focus):
         tasks.append(("himalayas"+str(i),lambda q=phrase:_himalayas(profile,code,q)))
     if not focus and code:
