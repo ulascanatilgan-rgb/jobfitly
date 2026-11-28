@@ -95,6 +95,9 @@ def _lever(slug,company):
  for item in data[:400]:
   if not isinstance(item,dict) or not item.get("id"):continue
   loc=_text((item.get("categories") or {}).get("location"))
+  workplace=_text(item.get("workplaceType") or "")
+  if workplace and workplace.casefold() not in loc.casefold():
+   loc+=((" · " if loc else "")+workplace)
   desc=item.get("descriptionPlain") or item.get("description") or item.get("openingPlain") or ""
   lists=item.get("lists") or []
   if isinstance(lists,list):
@@ -118,6 +121,9 @@ def _ashby(slug,company):
   address=item.get("address")
   if isinstance(address,dict):country=_text(address.get("addressCountry"))
   if item.get("isRemote") and "remote" not in loc.lower():loc+=" (Remote)"
+  workplace=_text(item.get("workplaceType") or item.get("locationType") or "")
+  if workplace and workplace.casefold() not in loc.casefold():
+   loc+=((" · " if loc else "")+workplace)
   result.append(_job(item.get("title"),company,desc,item.get("jobUrl") or item.get("applyUrl"),
                      item.get("publishedAt") or "", "Ashby",loc,country,loc))
  return [item for item in result if item]
