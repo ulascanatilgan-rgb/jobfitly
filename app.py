@@ -326,8 +326,7 @@ def preview_candidates(uid,max_results=5):
  prepare_search_context(p)
  selected=selected_languages(p.get('language'))
  results=[]
- for job in shared_jobs(DB,p.get('country'),650):
-  if is_seen(job,seen):continue
+ for job in shared_jobs(DB,p.get('country'),1200):
   if not preference_constraints_match(job,p.get('swipes')):continue
   if not location_eligible(job,p):continue
   if not role_eligible(job,dict(p,cv_for_matching=cv),dna):continue
@@ -345,8 +344,12 @@ def preview_candidates(uid,max_results=5):
   else:weighted=.65*(fit/10)+.25*alignment+.10*(dna_fit/10)
   score=round(max(1,min(9.8,weighted+path_fit*1.1-feedback_penalty(job,feedback))),1)
   if score<6.5:continue
-  results.append(dict(job,score=score,matched_terms=terms))
- results.sort(key=lambda item:item['score'],reverse=True)
+  candidate=dict(job,score=score,matched_terms=terms)
+  if is_seen(job,seen):
+   candidate['source']=str(candidate.get('source') or '')+' · previously shown'
+  results.append(candidate)
+ # Prefer first-time discoveries without discarding still-relevant older jobs.
+ results.sort(key=lambda item:('previously shown' not in str(item.get('source')),item['score']),reverse=True)
  unique=[];taken=set()
  for item in results:
   keys=_job_keys(item)
