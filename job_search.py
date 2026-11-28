@@ -13,27 +13,34 @@ import requests
 
 
 def _canonical(url):
-    """Provider-aware identity: Indeed URLs need jk=...; search pages are not jobs."""
+    """Normalize exact listing IDs across regional hostnames and tracking URLs.
+
+    Only individual job advertisements qualify. A source citation must contain
+    the same immutable vacancy ID; results pages cannot pass as individual jobs.
+    """
     try:
         parts=urlsplit(str(url).strip())
         host=(parts.hostname or "").casefold().removeprefix("www.")
         path=unquote(parts.path).rstrip("/").casefold()
         if parts.scheme!="https" or not host or not path or path=="/":
             return None
-        if "indeed." in host:
+        if host.endswith("indeed.com") or ".indeed." in host or host.startswith("indeed."):
             job_id=parse_qs(parts.query).get("jk",[])
             if path not in ("/viewjob","/rc/clk","/pagead/clk") or not job_id:
                 return None
-            return host,"/viewjob/"+job_id[0].casefold()
-        if "linkedin.com" in host:
-            # Results hubs (/jobs/operations-jobs) are NOT job advertisements.
-            if not re.search(r"/jobs/view/[^/]*\d{6,}",path):return None
-        if "stepstone." in host:
-            # StepStone result lists may include hundreds of unrelated cards.
-            if not re.search(r"/(?:jobs|vacatures|emplois|offres-d-emploi)--[^/]+--\d+-inline\.html$",path):
-                return None
-        if "yaymonday.be" in host and not re.fullmatch(r"/jobs/[a-z0-9][a-z0-9-]+",path):
-            return None
+            if not re.fullmatch(r"[a-zA-Z0-9]{8,32}",job_id[0]):return None
+            return "indeed",job_id[0].casefold()
+        if host.endswith("linkedin.com"):
+            match=re.search(r"^/jobs/view/[^/]*?(\d{7,15})$",path)
+            if not match:return None
+            return "linkedin",match.group(1)
+        if host.startswith("stepstone.") or ".stepstone." in host:
+            match=re.search(r"^/(?:jobs|vacatures|emplois|offres-d-emploi)--[^/]+--(\d+)-inline\.html$",path)
+            if not match:return None
+            return "stepstone:"+host.split(".")[-1],match.group(1)
+        if host.endswith("yaymonday.be"):
+            if not re.fullmatch(r"/jobs/[a-z0-9][a-z0-9-]+",path):return None
+            return "yaymonday.be",path
         if re.search(r"/(?:search|search-results|job-search|all-jobs|jobs/search|job-list|find-a-job)$",path):
             return None
         return host,path
