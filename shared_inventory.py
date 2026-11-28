@@ -128,7 +128,7 @@ def _country_matches(job,country):
  loc=_text(job.get("location_label") or job.get("city") or "")
  value=(loc+" "+str(job.get("country") or "")).casefold()
  aliases={
-  "BE":("belgium","belgië","belgique","brussels","antwerp","antwerpen","ghent","gent","leuven","liège","liege"),
+  "BE":("belgium","belgië","belgique","brussels","brussel","bruxelles","etterbeek","ixelles","auderghem","woluwe","uccle","antwerp","antwerpen","anvers","berchem","deurne","merksem","wilrijk","kapellen","brasschaat","kalmthout","ekeren","mechelen","malines","ghent","gent","gand","leuven","louvain","liège","liege","hasselt","bruges","brugge","kortrijk","namur","namur","aalst"),
   "NL":("netherlands","nederland","amsterdam","rotterdam","utrecht"),
   "FR":("france","paris","lyon"),"DE":("germany","deutschland","berlin","munich"),
   "GB":("united kingdom","london","england","uk "),
