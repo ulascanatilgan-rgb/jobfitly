@@ -10,6 +10,7 @@ from job_feeds import discover_feed_jobs, _role_queries
 from matching import lexical_fit, ai_cv_fit, specialty_fit
 from career_dna import career_dna, role_similarity
 from career_search import career_targets, role_relevance, role_eligible, location_eligible
+from occupation_profile import occupation_profile
 from next_moves import alternative_next_moves, valid_path_titles, path_title_match
 from shared_inventory import prepare_inventory, shared_jobs, refresh_shared
 from preferences import normalize_preferences, preference_alignment, preference_constraints_match
@@ -484,7 +485,7 @@ def get_run(uid,date=None):
     (SELECT 1 FROM job_feedback f WHERE f.user_id=j.user_id AND f.url=j.url)
    ORDER BY r.position ASC LIMIT 12""",(run['id'],)).fetchall()
   p=profile_for(uid)
-  jobs=sorted((dict(j) for j in rows if float(j['score'])>=6.5 and language_eligible(dict(j),p.get('language')) and location_eligible(dict(j),p) and role_eligible(dict(j),p)),key=lambda item:item['score'],reverse=True)[:5]
+  jobs=sorted((dict(j) for j in rows if float(j['score'])>=6.5 and language_eligible(dict(j),p.get('language')) and location_eligible(dict(j),p)),key=lambda item:item['score'],reverse=True)[:5]
  for job in jobs:job['matched_terms']=json.loads(job['matched_terms'] or '[]')
  # Only positions actually returned to the UI are recorded, not the reserves.
  remember_displayed(uid,jobs)
@@ -502,6 +503,11 @@ def run_search(uid):
  feedback=feedback_for(uid)
  seen=previously_seen(uid)
  if not p['cv_for_matching'].strip():return None,'Upload a readable CV before running.',400
+ # Build a fresh per-user occupational search plan from this user's actual CV.
+ # Extracted titles are independently backed by quotes in their CV.
+ p['occupation_profile']=occupation_profile(p)
+ app.logger.info('Career search profession profile: role_titles=%s method=%s',
+                 len(p['occupation_profile'].get('roles',[])),p['occupation_profile'].get('method'))
  # Recover interrupted searches when a browser disconnects or worker terminates.
  try:
   with conn() as c:
