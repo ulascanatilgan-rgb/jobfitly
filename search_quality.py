@@ -43,6 +43,27 @@ def search_waves(profile):
          "indexed job postings, regional specialty boards, LinkedIn, Indeed, "
          "StepStone, Workday and ATS. No job-search result pages; actual job only."),
     ]
+    if not belgium:
+        # Other countries should not waste a paid web-search pass on Belgian
+        # StepStone or be.indeed.com links.
+        market={
+            "netherlands":"stepstone.nl", "nederland":"stepstone.nl",
+            "germany":"stepstone.de", "deutschland":"stepstone.de",
+            "austria":"stepstone.at",
+            "france":"fr.indeed.com", "united kingdom":"uk.indeed.com",
+            "uk":"uk.indeed.com", "united states":"indeed.com",
+            "usa":"indeed.com", "canada":"ca.indeed.com",
+            "ireland":"ie.indeed.com", "luxembourg":"lu.indeed.com",
+        }
+        source=market.get(country.casefold())
+        if source:
+            groups=[(key,queries,notes.replace("site:stepstone.be/jobs-- or /vacatures--",
+                                               "site:"+source+" individual vacancy pages"))
+                    for key,queries,notes in groups]
+        else:
+            groups=[(key,queries,notes.replace("site:stepstone.be/jobs-- or /vacatures--",
+                                               "local country job-board vacancy URLs"))
+                    for key,queries,notes in groups]
     if belgium:
         extra=(" Also search Belgian jobs and employers using locally relevant "
                "location labels: Belgium, Bruxelles/Brussels, Antwerpen/Antwerp, "
