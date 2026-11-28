@@ -221,11 +221,11 @@ def refresh_shared(db,profile=None):
  try:
   prepare_inventory(con)
   con.execute("BEGIN IMMEDIATE")
-  row=con.execute("SELECT * FROM shared_refresh WHERE source='ats'").fetchone()
+  row=con.execute("SELECT * FROM shared_refresh WHERE source='ats-v2'").fetchone()
   if row and (row[1]+TTL_SECONDS>ts or row[2]>ts):
    con.commit();return shared_jobs(db,(profile or {}).get("country"))
   con.execute("""INSERT INTO shared_refresh(source,last_success,lease_until)
-    VALUES('ats',0,?) ON CONFLICT(source) DO UPDATE SET lease_until=excluded.lease_until""",
+    VALUES('ats-v2',0,?) ON CONFLICT(source) DO UPDATE SET lease_until=excluded.lease_until""",
     (ts+LEASE_SECONDS,))
   con.commit()
  finally:con.close()
@@ -262,9 +262,9 @@ def refresh_shared(db,profile=None):
   # A failed provider wave backs off for 10 minutes instead of hammering
   # every public employer API on each new user's next search.
   if success:
-   con.execute("UPDATE shared_refresh SET lease_until=0,last_success=? WHERE source='ats'",(ts,))
+   con.execute("UPDATE shared_refresh SET lease_until=0,last_success=? WHERE source='ats-v2'",(ts,))
   else:
-   con.execute("UPDATE shared_refresh SET lease_until=? WHERE source='ats'",(ts+600,))
+   con.execute("UPDATE shared_refresh SET lease_until=? WHERE source='ats-v2'",(ts+600,))
   con.execute("DELETE FROM shared_jobs WHERE fetched_at<?",(ts-MAX_STALE_SECONDS,))
   con.commit()
  finally:con.close()
