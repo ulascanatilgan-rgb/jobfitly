@@ -601,10 +601,10 @@ def run_search(uid):
   # Semantic validation checks requirements vs. real CV, not aspirations.
   candidates.sort(key=lambda entry:.6*entry[1]+.4*role_relevance(entry[0],p,dna)+12*path_title_match(entry[0],p.get('path_keywords')),reverse=True)
   candidates=candidates[:55]
-  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:35]])
+  ai=ai_cv_fit(p,[entry[0] for entry in candidates[:40]])
   ranked=[]
   for idx,(j,cv_fit,evidence) in enumerate(candidates):
-   assessment=ai.get(idx) if idx<35 else None
+   assessment=ai.get(idx) if idx<40 else None
    title_fit=role_relevance(j,p,dna)
    if assessment:
     semantic=assessment['cv_fit']
