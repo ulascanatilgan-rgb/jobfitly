@@ -62,7 +62,7 @@ SWIPES = [
  ('mode','Work setting',['Remote','Hybrid','On-site','No preference']),
  ('seniority','Career level',['Specialist','Manager','Leadership','Flexible'])
 ]
-MAX_AGE_DAYS = max(1,min(int(os.getenv('MAX_JOB_AGE_DAYS','30')),30))
+MAX_AGE_DAYS = max(1,min(int(os.getenv('MAX_JOB_AGE_DAYS','60')),90))
 STOP = set('the a an and or in on to for of at from with by you your we are is be as have has this that will our their who into ability strong experience work working role team company years including can must should preferred required using plus good excellent'.split())
 
 @contextmanager
@@ -641,8 +641,17 @@ def run_search(uid):
   checked=[];unverified=[]
   candidates_to_check=[]
   for item in shortlist:
-   if str(item[1].get('source') or '') in trusted:
+   source=str(item[1].get('source') or '')
+   if source in trusted:
     checked.append(item)
+   elif '(indexed vacancy)' in source:
+    # A web-search citation is evidence of an indexed job page, NOT proof
+    # it is still open. Do not scrape protected LinkedIn/Indeed/StepStone
+    # websites to try to verify it; transparently flag index-only status.
+    if item[0]<7.2:continue
+    candidate=dict(item[1])
+    candidate['source']=source+' · availability not independently verified'
+    checked.append((item[0],candidate,item[2]))
    else:
     candidates_to_check.append(item)
   if len(checked)<12 and candidates_to_check:
